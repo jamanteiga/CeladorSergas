@@ -1,15 +1,16 @@
 :root {
-    --win-bg: #f3f3f3;
-    --win-accent: #0078d4;
-    --win-card: rgba(255, 255, 255, 0.7);
-    --win-radius: 8px;
+    --accent: #0078d4;
+    --bg: #f3f3f3;
+    --card: rgba(255, 255, 255, 0.85);
+    --text: #1b1b1b;
 }
 
 body {
-    background: var(--win-bg);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    overflow: hidden;
+    font-family: 'Segoe UI Variable', sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    height: 100vh;
 }
 
 .win-app {
@@ -19,45 +20,49 @@ body {
 }
 
 .win-header {
-    padding: 15px;
-    background: rgba(255,255,255,0.5);
-    backdrop-filter: blur(20px);
+    padding: 12px 20px;
+    background: rgba(255,255,255,0.6);
+    backdrop-filter: blur(15px);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
 }
 
 .win-card {
-    background: var(--win-card);
-    margin: 10px;
+    background: var(--card);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
     padding: 15px;
-    border-radius: var(--win-radius);
-    border: 1px solid rgba(0,0,0,0.05);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    margin: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
-.win-btn {
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    padding: 10px 20px;
-    background: #fff;
-    cursor: pointer;
+.win-taskbar {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 15px;
+    padding: 15px;
+    background: rgba(238, 244, 249, 0.9);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(0,0,0,0.05);
 }
 
-.win-btn.primary {
-    background: var(--win-accent);
+.win-start-btn {
+    background: var(--accent);
     color: white;
     border: none;
+    padding: 10px 25px;
+    border-radius: 4px;
+    font-weight: 600;
 }
 
-.magnifier {
+/* Lupa */
+.win-magnifier {
     position: absolute;
-    width: 100px;
-    height: 100px;
-    border: 2px solid var(--win-accent);
+    width: 120px;
+    height: 120px;
+    border: 2px solid var(--accent);
     border-radius: 50%;
-    pointer-events: none;
+    box-shadow: 0 0 20px rgba(0,0,0,0.2);
     display: none;
+    pointer-events: none;
     background: white;
-    z-index: 10;
 }
