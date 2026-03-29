@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="BrainScan 11">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
     
-    <title>BrainScan 11 - Studio</title>
+    <meta http-equiv="cache-control" content="no-cache">
+    <meta http-equiv="expires" content="0">
+    <meta http-equiv="pragma" content="no-cache">
+
+    <title>BrainScan 11</title>
     
-    <link rel="manifest" href="./manifest.json">
-    <link rel="stylesheet" href="./style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
     
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -20,64 +22,32 @@
 <body>
     <div class="win-app">
         <header class="win-header">
-            <div class="title-bar">
-                <span class="win-logo">🟦</span>
-                <h1>BrainScan 11 <span class="badge">Apuntes</span></h1>
-            </div>
+            <div class="title-bar"><h1>BrainScan 11</h1></div>
         </header>
-
         <main class="win-content">
-            <div class="win-grid">
-                <div class="win-card">
-                    <label class="win-label">Carpeta de Destino</label>
-                    <select id="temaSel" class="win-select">
-                        <option value="Apuntes_Navales">📚 Apuntes Navales</option>
-                        <option value="Manuales_Tecnicos">📖 Manuales Técnicos</option>
-                        <option value="Examenes">📝 Exámenes</option>
-                    </select>
-                </div>
-
-                <div class="win-card camera-box" style="position:relative; min-height: 300px;">
-                    <div id="lupa" class="win-magnifier"></div>
-                    <canvas id="mainCanvas" style="width:100%; border-radius:8px;"></canvas>
-                    <div id="ocrStatus" class="win-status">Esperando captura...</div>
-                </div>
-
-                <div id="resultCard" class="win-card shadow" style="display:none;">
-                    <div class="card-header">
-                        <span>✨ Esquema Sugerido</span>
-                    </div>
-                    <div id="smartSummary" class="editable-content" contenteditable="true" style="min-height:100px; border:1px solid #ddd; padding:10px; margin-top:10px;"></div>
-                </div>
+            <div class="win-card">
+                <canvas id="mainCanvas" style="width:100%; border-radius:8px; background:#eee;"></canvas>
+                <div id="ocrStatus">Esperando...</div>
+            </div>
+            <div id="resultCard" class="win-card" style="display:none;">
+                <div id="smartSummary" contenteditable="true"></div>
             </div>
         </main>
-
         <footer class="win-taskbar">
-            <button class="win-start-btn" onclick="document.getElementById('fileInp').click()">
-                <span class="icon">📷</span> Capturar
-            </button>
+            <button onclick="document.getElementById('fileInp').click()">📷 Foto</button>
             <input type="file" id="fileInp" accept="image/*" capture="environment" style="display:none" onchange="handleCapture(event)">
-            
-            <button class="win-action-btn" onclick="runSmartOCR()">
-                <span class="icon">🔍</span> Analizar
-            </button>
-            
-            <button class="win-action-btn success" onclick="saveAndSend()">
-                <span class="icon">📧</span> Finalizar
-            </button>
+            <button onclick="runSmartOCR()">🔍 Analizar</button>
+            <button onclick="saveAndSend()">📧 Enviar</button>
         </footer>
     </div>
 
-    <script src="./app.js"></script>
+    <script src="app.js"></script>
     <script>
-        // Registro del Service Worker con ruta relativa
+        // REGISTRO ROBUSTO: Detecta la ruta automáticamente
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW registrado con éxito'))
-                    .catch(err => console.log('Error al registrar SW:', err));
-            });
-        }
-    </script>
-</body>
-</html>
+                const swPath = window.location.pathname.endsWith('/') 
+                               ? 'sw.js' 
+                               : window.location.pathname.split('/').pop() === 'index.html' 
+                                 ? 'sw.js' 
+                                 : './
