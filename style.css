@@ -1,0 +1,63 @@
+:root {
+    --win-bg: #f3f3f3;
+    --win-accent: #0078d4;
+    --win-card: rgba(255, 255, 255, 0.7);
+    --win-radius: 8px;
+}
+
+body {
+    background: var(--win-bg);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    overflow: hidden;
+}
+
+.win-app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.win-header {
+    padding: 15px;
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(20px);
+}
+
+.win-card {
+    background: var(--win-card);
+    margin: 10px;
+    padding: 15px;
+    border-radius: var(--win-radius);
+    border: 1px solid rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+}
+
+.win-btn {
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    padding: 10px 20px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.win-btn.primary {
+    background: var(--win-accent);
+    color: white;
+    border: none;
+}
+
+.magnifier {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border: 2px solid var(--win-accent);
+    border-radius: 50%;
+    pointer-events: none;
+    display: none;
+    background: white;
+    z-index: 10;
+}

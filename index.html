@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>BrainScan 11</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="win-app">
+        <header class="win-header">
+            <div class="title-bar">
+                <span class="icon">📄</span>
+                <h1>BrainScan - Apuntes</h1>
+            </div>
+        </header>
+
+        <main class="win-content">
+            <div class="win-card">
+                <label>Tema de Estudio:</label>
+                <select id="temaSel" class="win-select">
+                    <option value="Apuntes">📚 Apuntes</option>
+                    <option value="Manuales">📖 Manuales</option>
+                    <option value="Otros">📁 Otros</option>
+                </select>
+            </div>
+
+            <div class="win-card preview-container">
+                <div id="lupa" class="magnifier"></div>
+                <canvas id="mainCanvas"></canvas>
+                <div id="statusOCR" class="win-badge">Listo para escanear</div>
+            </div>
+
+            <div id="resumenArea" class="win-card" style="display:none;">
+                <h3>Resumen Inteligente</h3>
+                <div id="textoResumen" contenteditable="true"></div>
+            </div>
+        </main>
+
+        <nav class="win-nav">
+            <button class="win-btn primary" onclick="tomarFoto()">
+                <span class="icon">📷</span> Capturar
+            </button>
+            <button class="win-btn" onclick="procesarOCR()">
+                <span class="icon">🔍</span> Leer Texto
+            </button>
+            <button class="win-btn success" onclick="finalizarTema()">
+                <span class="icon">📧</span> Enviar PDF
+            </button>
+        </nav>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
