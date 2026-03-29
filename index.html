@@ -5,49 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="BrainScan 11">
-    
-    <meta http-equiv="cache-control" content="no-cache">
-    <meta http-equiv="expires" content="0">
-    <meta http-equiv="pragma" content="no-cache">
-
     <title>BrainScan 11</title>
     
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
-    
-    <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root { --win-blue: #0078d4; --bg: #f3f3f3; }
+        body { background: var(--bg); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; color: #333; }
+        .win-header { background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd; }
+        .win-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        canvas { width: 100%; background: #000; border-radius: 5px; display: block; min-height: 200px; }
+        .win-taskbar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(243,243,243,0.9); backdrop-filter: blur(15px); padding: 20px; display: flex; justify-content: space-around; border-top: 1px solid #ccc; z-index: 100; }
+        button { padding: 12px 20px; border-radius: 6px; border: 1px solid #ccc; background: white; font-weight: 600; font-size: 14px; }
+        .btn-primary { background: var(--win-blue); color: white; border: none; }
+        #smartSummary { background: #fafafa; border: 1px solid #eee; padding: 10px; border-radius: 5px; min-height: 100px; font-size: 14px; margin-top: 10px; }
+        .status-badge { font-size: 11px; color: var(--win-blue); margin-top: 5px; font-weight: bold; }
+    </style>
 </head>
 <body>
-    <div class="win-app">
-        <header class="win-header">
-            <div class="title-bar"><h1>BrainScan 11</h1></div>
-        </header>
-        <main class="win-content">
-            <div class="win-card">
-                <canvas id="mainCanvas" style="width:100%; border-radius:8px; background:#eee;"></canvas>
-                <div id="ocrStatus">Esperando...</div>
-            </div>
-            <div id="resultCard" class="win-card" style="display:none;">
-                <div id="smartSummary" contenteditable="true"></div>
-            </div>
-        </main>
-        <footer class="win-taskbar">
-            <button onclick="document.getElementById('fileInp').click()">📷 Foto</button>
-            <input type="file" id="fileInp" accept="image/*" capture="environment" style="display:none" onchange="handleCapture(event)">
-            <button onclick="runSmartOCR()">🔍 Analizar</button>
-            <button onclick="saveAndSend()">📧 Enviar</button>
-        </footer>
+
+    <header class="win-header">
+        <h2 style="margin:0; font-size: 18px;">🟦 BrainScan 11</h2>
+    </header>
+
+    <div class="win-card">
+        <label style="font-size: 12px; font-weight: bold;">Carpeta: Apuntes</label>
+        <canvas id="mainCanvas"></canvas>
+        <div id="ocrStatus" class="status-badge">Listo. Saca una foto.</div>
     </div>
 
-    <script src="app.js"></script>
+    <div id="resultCard" class="win-card" style="display:none;">
+        <strong>Esquema de Estudio:</strong>
+        <div id="smartSummary" contenteditable="true"></div>
+    </div>
+
+    <div style="height:100px;"></div>
+
+    <footer class="win-taskbar">
+        <button onclick="document.getElementById('fileInp').click()">📷 Foto</button>
+        <input type="file" id="fileInp" accept="image/*" capture="environment" style="display:none" onchange="handleCapture(event)">
+        
+        <button class="btn-primary" onclick="runSmartOCR()">🔍 Analizar</button>
+        
+        <button onclick="saveAndSend()">📧 Enviar</button>
+    </footer>
+
     <script>
-        // REGISTRO ROBUSTO: Detecta la ruta automáticamente
+        // LÓGICA DE LA APP
+        let sessionImages = [];
+
+        function handleCapture(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const canvas = document.getElementById('mainCanvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                const scale = Math.min(1024 / img.width, 1024 / img.height, 1);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                sessionImages.push(canvas.toDataURL('image/jpeg', 0.8));
+                document.getElementById('ocrStatus').innerText = "Imagen cargada. Pulsa Analizar.";
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        async function runSmartOCR() {
+            const status = document.getElementById('ocrStatus');
+            const canvas = document.getElementById('mainCanvas');
+            status.innerText = "⏳ Descargando motor OCR... (Solo la 1ª vez)";
+            
+            try {
+                const worker = await Tesseract.createWorker('spa');
+                status.innerText = "⏳ Analizando texto...";
+                const { data: { text } } = await worker.recognize(canvas);
+                await worker.terminate();
+
+                document.getElementById('resultCard').style.display = 'block';
+                const lines = text.split('\n').filter(l => l.trim().length > 8);
+                const html = "<ul>" + lines.map(l => `<li>${l}</li>`).join('') + "</ul>";
+                document.getElementById('smartSummary').innerHTML += html;
+                status.innerText = "✅ Análisis completado.";
+            } catch (err) {
+                status.innerText = "❌ Error. Reintenta con internet.";
+                console.error(err);
+            }
+        }
+
+        async function saveAndSend() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.text("Resumen Inteligente - BrainScan 11", 20, 20);
+            const content = document.getElementById('smartSummary').innerText;
+            const lines = doc.splitTextToSize(content, 170);
+            doc.setFontSize(12);
+            doc.text(lines, 20, 40);
+
+            sessionImages.forEach((img) => {
+                doc.addPage();
+                doc.addImage(img, 'JPEG', 10, 10, 190, 0);
+            });
+
+            const pdfBlob = doc.output('blob');
+            const file = new File([pdfBlob], "Apuntes_BrainScan.pdf", { type: "application/pdf" });
+
+            if (navigator.share) {
+                await navigator.share({ files: [file], title: 'Mis Apuntes' });
+            } else {
+                doc.save("Apuntes.pdf");
+            }
+        }
+
+        // Service Worker
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                const swPath = window.location.pathname.endsWith('/') 
-                               ? 'sw.js' 
-                               : window.location.pathname.split('/').pop() === 'index.html' 
-                                 ? 'sw.js' 
-                                 : './
+            navigator.serviceWorker.register('sw.js').catch(console.error);
+        }
+    </script>
+</body>
+</html>
