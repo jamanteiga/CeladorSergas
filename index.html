@@ -4,56 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>BrainScan 11</title>
+    <title>BrainScan 11 PRO</title>
     
-    <link rel="manifest" href="manifest.json">
-    <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
         :root { --win-blue: #0078d4; --bg: #f3f3f3; }
-        body { background: var(--bg); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 15px; color: #333; }
-        .win-header { background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd; }
-        .win-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        canvas { width: 100%; background: #000; border-radius: 5px; display: block; min-height: 200px; }
-        .win-taskbar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(243,243,243,0.9); backdrop-filter: blur(15px); padding: 20px; display: flex; justify-content: space-around; border-top: 1px solid #ccc; z-index: 100; }
-        button { padding: 12px 20px; border-radius: 6px; border: 1px solid #ccc; background: white; font-weight: 600; font-size: 14px; }
-        .btn-primary { background: var(--win-blue); color: white; border: none; }
-        #smartSummary { background: #fafafa; border: 1px solid #eee; padding: 10px; border-radius: 5px; min-height: 100px; font-size: 14px; margin-top: 10px; }
-        .status-badge { font-size: 11px; color: var(--win-blue); margin-top: 5px; font-weight: bold; }
+        body { background: var(--bg); font-family: -apple-system, sans-serif; margin: 0; padding: 15px; padding-bottom: 100px; }
+        .win-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; border: 1px solid #e5e5e5; }
+        canvas { width: 100%; background: #000; border-radius: 8px; display: block; aspect-ratio: 4/3; object-fit: contain; }
+        .win-taskbar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); padding: 20px; display: flex; justify-content: space-around; border-top: 1px solid #ddd; z-index: 1000; }
+        button { padding: 12px 24px; border-radius: 8px; border: 1px solid #ccc; background: white; font-weight: 600; font-size: 15px; -webkit-appearance: none; }
+        .btn-primary { background: var(--win-blue); color: white; border: none; box-shadow: 0 2px 4px rgba(0,120,212,0.3); }
+        #ocrStatus { font-size: 13px; color: var(--win-blue); margin-top: 10px; text-align: center; font-weight: 500; }
+        #smartSummary { background: #f9f9f9; border: 1px solid #eee; padding: 12px; border-radius: 8px; min-height: 100px; font-size: 15px; margin-top: 10px; line-height: 1.5; }
     </style>
 </head>
 <body>
 
-    <header class="win-header">
-        <h2 style="margin:0; font-size: 18px;">🟦 BrainScan 11</h2>
-    </header>
-
     <div class="win-card">
-        <label style="font-size: 12px; font-weight: bold;">Carpeta: Apuntes</label>
+        <h2 style="margin:0 0 10px 0; font-size: 20px;">🟦 BrainScan 11</h2>
         <canvas id="mainCanvas"></canvas>
-        <div id="ocrStatus" class="status-badge">Listo. Saca una foto.</div>
+        <div id="ocrStatus">Esperando imagen...</div>
     </div>
 
     <div id="resultCard" class="win-card" style="display:none;">
-        <strong>Esquema de Estudio:</strong>
+        <strong>📝 Esquema generado:</strong>
         <div id="smartSummary" contenteditable="true"></div>
     </div>
-
-    <div style="height:100px;"></div>
 
     <footer class="win-taskbar">
         <button onclick="document.getElementById('fileInp').click()">📷 Foto</button>
         <input type="file" id="fileInp" accept="image/*" capture="environment" style="display:none" onchange="handleCapture(event)">
-        
         <button class="btn-primary" onclick="runSmartOCR()">🔍 Analizar</button>
-        
         <button onclick="saveAndSend()">📧 Enviar</button>
     </footer>
 
     <script>
-        // LÓGICA DE LA APP
         let sessionImages = [];
 
         function handleCapture(e) {
@@ -63,12 +51,14 @@
             const ctx = canvas.getContext('2d');
             const img = new Image();
             img.onload = () => {
-                const scale = Math.min(1024 / img.width, 1024 / img.height, 1);
-                canvas.width = img.width * scale;
-                canvas.height = img.height * scale;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const maxDim = 1200;
+                let w = img.width, h = img.height;
+                if (w > h && w > maxDim) { h *= maxDim/w; w = maxDim; }
+                else if (h > maxDim) { w *= maxDim/h; h = maxDim; }
+                canvas.width = w; canvas.height = h;
+                ctx.drawImage(img, 0, 0, w, h);
                 sessionImages.push(canvas.toDataURL('image/jpeg', 0.8));
-                document.getElementById('ocrStatus').innerText = "Imagen cargada. Pulsa Analizar.";
+                document.getElementById('ocrStatus').innerText = "✅ Imagen cargada";
             };
             img.src = URL.createObjectURL(file);
         }
@@ -76,53 +66,58 @@
         async function runSmartOCR() {
             const status = document.getElementById('ocrStatus');
             const canvas = document.getElementById('mainCanvas');
-            status.innerText = "⏳ Descargando motor OCR... (Solo la 1ª vez)";
+            
+            if (canvas.width === 0) {
+                alert("Primero saca una foto");
+                return;
+            }
+
+            status.innerText = "⏳ Inicializando motor...";
             
             try {
-                const worker = await Tesseract.createWorker('spa');
-                status.innerText = "⏳ Analizando texto...";
+                // Configuración manual del worker para evitar errores en Safari
+                const worker = await Tesseract.createWorker({
+                    logger: m => {
+                        if(m.status === 'initializing api') status.innerText = "⏳ Cargando Diccionarios...";
+                        if(m.status === 'recognizing text') status.innerText = `⏳ Analizando: ${Math.round(m.progress * 100)}%`;
+                    }
+                });
+
+                await worker.loadLanguage('spa');
+                await worker.initialize('spa');
                 const { data: { text } } = await worker.recognize(canvas);
                 await worker.terminate();
 
+                if(!text || text.trim().length < 2) {
+                    status.innerText = "⚠️ No se detectó texto claro.";
+                    return;
+                }
+
                 document.getElementById('resultCard').style.display = 'block';
-                const lines = text.split('\n').filter(l => l.trim().length > 8);
+                const lines = text.split('\n').filter(l => l.trim().length > 5);
                 const html = "<ul>" + lines.map(l => `<li>${l}</li>`).join('') + "</ul>";
                 document.getElementById('smartSummary').innerHTML += html;
-                status.innerText = "✅ Análisis completado.";
+                status.innerText = "✅ ¡Hecho!";
+                
             } catch (err) {
-                status.innerText = "❌ Error. Reintenta con internet.";
                 console.error(err);
+                status.innerText = "❌ Error de conexión o memoria. Reintenta.";
+                alert("Error técnico: " + err.message);
             }
         }
 
         async function saveAndSend() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.setFontSize(18);
-            doc.text("Resumen Inteligente - BrainScan 11", 20, 20);
+            doc.text("Resumen BrainScan", 20, 20);
             const content = document.getElementById('smartSummary').innerText;
-            const lines = doc.splitTextToSize(content, 170);
-            doc.setFontSize(12);
-            doc.text(lines, 20, 40);
-
-            sessionImages.forEach((img) => {
-                doc.addPage();
-                doc.addImage(img, 'JPEG', 10, 10, 190, 0);
-            });
-
+            doc.text(doc.splitTextToSize(content, 170), 20, 30);
+            sessionImages.forEach(img => { doc.addPage(); doc.addImage(img, 'JPEG', 10, 10, 190, 0); });
+            
             const pdfBlob = doc.output('blob');
-            const file = new File([pdfBlob], "Apuntes_BrainScan.pdf", { type: "application/pdf" });
-
-            if (navigator.share) {
-                await navigator.share({ files: [file], title: 'Mis Apuntes' });
-            } else {
-                doc.save("Apuntes.pdf");
-            }
-        }
-
-        // Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(console.error);
+            const file = new File([pdfBlob], "Apuntes.pdf", { type: "application/pdf" });
+            if (navigator.share) await navigator.share({ files: [file], title: 'Mis Apuntes' });
+            else doc.save("Apuntes.pdf");
         }
     </script>
 </body>
