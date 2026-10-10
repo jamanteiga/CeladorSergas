@@ -18,7 +18,7 @@ function lee(k, def) { try { var v = localStorage.getItem("celador." + k); retur
 function guarda(k, v) { try { localStorage.setItem("celador." + k, JSON.stringify(v)); } catch (e) {} }
 function borra(k) { try { localStorage.removeItem("celador." + k); } catch (e) {} }
 
-var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = [];
+var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = []; if (!cfg.nivel) cfg.nivel = "X";
 var hist = lee("hist", []), est = lee("q", {}), cur = lee("cur", null);
 var vista = { v: "inicio", tab: "est", per: 7, graf: "pct", res: null, filtro: "todas" }, tic = null, visto = 0;
 
@@ -40,14 +40,20 @@ function ponderadas(pool, n) { // prioriza las menos vistas
     return { p: p, k: Math.pow(Math.random(), Math.pow(1 + vistas, 1.5)) };
   }).sort(function (a, b) { return b.k - a.k; }).slice(0, n).map(function (x) { return x.p; });
 }
+function enPool(p) { // filtros de la batería: tipo, temas y nivel
+  return (cfg.tipo === "M" || p.k === cfg.tipo) && (!cfg.temas.length || cfg.temas.indexOf(p.t) >= 0) && (cfg.nivel !== "D" || p.d === 1);
+}
 function eligeBateria() {
-  var pool = BANCO.filter(function (p) {
-    return (cfg.tipo === "M" || p.k === cfg.tipo) && (!cfg.temas.length || cfg.temas.indexOf(p.t) >= 0);
-  });
+  var pool = BANCO.filter(enPool);
   var n = Math.min(N_BAT, pool.length);
   var fall = baraja(pool.filter(function (p) { return est[p.id] && est[p.id].u === 0; })).slice(0, Math.round(n * 0.27));
   var ids = {}; fall.forEach(function (p) { ids[p.id] = 1; });
-  var resto = ponderadas(pool.filter(function (p) { return !ids[p.id]; }), n - fall.length);
+  var libres = pool.filter(function (p) { return !ids[p.id]; }), falta = n - fall.length, resto;
+  if (cfg.nivel === "X") { // unas dos de cada tres, difíciles
+    var dif = ponderadas(libres.filter(function (p) { return p.d === 1; }), Math.round(falta * 2 / 3));
+    dif.forEach(function (p) { ids[p.id] = 1; });
+    resto = dif.concat(ponderadas(libres.filter(function (p) { return !ids[p.id]; }), falta - dif.length));
+  } else resto = ponderadas(libres, falta);
   return baraja(fall.concat(resto));
 }
 function eligeSimulacro() {
@@ -116,13 +122,14 @@ function pinta() {
 /* ---------- inicio ---------- */
 function vInicio() {
   var nT = BANCO.filter(function (p) { return p.k === "T"; }).length, nP = BANCO.length - nT, pend = falladasPend().length;
-  var pool = BANCO.filter(function (p) { return (cfg.tipo === "M" || p.k === cfg.tipo) && (!cfg.temas.length || cfg.temas.indexOf(p.t) >= 0); }).length;
+  var pool = BANCO.filter(enPool).length, nD = BANCO.filter(function (p) { return p.d === 1; }).length;
   var nb = Math.min(N_BAT, pool), h = "";
-  h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos)</p></header><div class=\"cont\">";
+  h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)</p></header><div class=\"cont\">";
   if (cur) h += '<div class="carta"><div class="et">Test en curso</div><h2>Tienes un ' + MODOS[cur.modo].toLowerCase() + ' sin terminar</h2><div class="et">El tiempo sigue corriendo: quedan ' + mmss((cur.fin - Date.now()) / 1000) +
     '</div><div class="fila"><button class="btn" data-a="continuar">Continuar</button><button class="btn sec" data-a="descartar">Descartar</button></div></div>';
   h += '<div class="carta"><div class="et">Entrenador</div><h2>Batería de ' + nb + ' preguntas</h2><div class="et">' + mmss(nb * SEG_PREG) + " min · acierto +0,5 · fallo −" + num(cfg.pen, 3) + " · en blanco 0</div>";
   h += '<div class="seg">' + [["M", "Mixto"], ["T", "Teoría"], ["P", "Supuestos"]].map(function (o) { return '<button data-a="tipo" data-v="' + o[0] + '" class="' + (cfg.tipo === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
+  h += '<div class="seg">' + [["T", "Todas"], ["X", "Más difíciles"], ["D", "Solo difíciles"]].map(function (o) { return '<button data-a="nivel" data-v="' + o[0] + '" class="' + (cfg.nivel === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
   h += '<div class="chips"><button class="chip ' + (cfg.temas.length ? "" : "on") + '" data-a="tema" data-v="0">Todos los temas</button>' + Object.keys(TEMAS).map(function (t) {
     return '<button class="chip ' + (cfg.temas.indexOf(+t) >= 0 ? "on" : "") + '" data-a="tema" data-v="' + t + '" title="' + esc(TEMAS[t]) + '">T' + t + "</button>"; }).join("") + "</div>";
   if (cfg.temas.length) h += '<div class="et" style="margin-top:8px">' + cfg.temas.map(function (t) { return "T" + t + ": " + TEMAS[t]; }).join(" · ") + "</div>";
@@ -144,7 +151,7 @@ function vTest() {
   h += '<div class="prog"><i style="width:' + pct(hechas, n) + '%"></i></div><div class="puntos">' + cur.ps.map(function (x, j) {
     var c = ""; if (cur.r[j] >= 0) c = cur.inm ? (x.ord[cur.r[j]] === 0 ? "ok" : "ko") : "hecha";
     return '<button data-a="salta" data-v="' + j + '" class="' + c + (j === i ? " act" : "") + '" aria-label="Pregunta ' + (j + 1) + '">' + (j + 1) + "</button>"; }).join("") + "</div>";
-  h += '<div class="cont" style="padding-top:10px"><span class="tag">Tema ' + p.t + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + '</span><p class="preg">' + esc(p.q) + "</p>";
+  h += '<div class="cont" style="padding-top:10px"><span class="tag">Tema ' + p.t + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
   q.ord.forEach(function (o, j) {
     var c = ""; if (resuelta) { if (o === 0) c = "ok"; else if (j === r) c = "ko"; } else if (j === r) c = "sel";
     h += '<button class="op ' + c + '" data-a="resp" data-v="' + j + '"' + (resuelta ? " disabled" : "") + "><b>" + "ABCD"[j] + "</b><span>" + esc(p.o[o]) + "</span></button>";
@@ -258,9 +265,9 @@ function vAjustes() {
   var h = '<header class="cab"><h1>Ajustes</h1><p>Los datos se guardan solo en este dispositivo</p></header><div class="cont">';
   h += '<div class="carta"><h2>Puntuación</h2><div class="et">Acierto +0,5. En blanco 0. En el examen el fallo resta 1/4 del valor del acierto (0,125).</div><h3>Penalización por fallo</h3><input type="number" id="pen" min="0" max="0.5" step="0.005" value="' + cfg.pen + '"><button class="btn sec" data-a="pen">Guardar penalización</button></div>';
   h += '<div class="carta"><h2>Copia de seguridad</h2><div class="et">Exporta el historial para llevarlo a otro dispositivo o guardarlo.</div><button class="btn sec" data-a="exporta">Exportar copia</button><h3>Importar copia</h3><input type="file" id="imp" accept="application/json,.json"><button class="btn rojo" data-a="borra">Borrar todos los datos</button></div>';
-  h += '<div class="carta"><h2>Banco de preguntas</h2><table class="tabla"><tr><th>Tema</th><th>Teoría</th><th>Supuestos</th></tr>' + Object.keys(TEMAS).map(function (t) {
+  h += '<div class="carta"><h2>Banco de preguntas</h2><table class="tabla"><tr><th>Tema</th><th>Teoría</th><th>Supuestos</th><th>Difíciles</th></tr>' + Object.keys(TEMAS).map(function (t) {
     var a = BANCO.filter(function (p) { return p.t === +t; }), s = a.filter(function (p) { return p.k === "P"; }).length;
-    return "<tr><td>T" + t + " " + esc(TEMAS[t]) + "</td><td>" + (a.length - s) + "</td><td>" + s + "</td></tr>"; }).join("") + "</table></div>";
+    return "<tr><td>T" + t + " " + esc(TEMAS[t]) + "</td><td>" + (a.length - s) + "</td><td>" + s + "</td><td>" + a.filter(function (p) { return p.d === 1; }).length + "</td></tr>"; }).join("") + "</table></div>";
   h += '<div class="carta"><h2>Instalar la app</h2><div class="et">iPhone / iPad (Safari): Compartir → Añadir a pantalla de inicio.<br>Android (Chrome): menú ⋮ → Instalar aplicación.<br>Windows 11 (Edge o Chrome): icono de instalar en la barra de direcciones, o menú → Aplicaciones → Instalar este sitio como aplicación.</div></div>';
   $app.innerHTML = h + "</div>";
   document.getElementById("imp").onchange = function (ev) {
@@ -286,6 +293,7 @@ function avisa(txt) { accionModal = null; $modal.innerHTML = '<div class="modal"
 var AC = {
   ir: function (v) { ir(v); },
   tipo: function (v) { cfg.tipo = v; guarda("cfg", cfg); pinta(); },
+  nivel: function (v) { cfg.nivel = v; guarda("cfg", cfg); pinta(); },
   tema: function (v) { v = +v; if (!v) cfg.temas = []; else { var k = cfg.temas.indexOf(v); if (k >= 0) cfg.temas.splice(k, 1); else cfg.temas.push(v); cfg.temas.sort(function (a, b) { return a - b; }); } guarda("cfg", cfg); pinta(); },
   empieza: function (v) { if (!cur) empieza(v); },
   continuar: function () { visto = Date.now(); if (cur.fin <= Date.now()) finaliza(true); else ir("test"); },
