@@ -12,13 +12,13 @@ INSTALAR
 - Windows 11 (Edge): menú ... > Aplicaciones > Instalar este sitio como aplicación.
 
 AMPLIAR EL BANCO DE PREGUNTAS
-- Las preguntas están en preguntas-1.js (temas 1 a 3), preguntas-2.js (temas 4 a 10) y preguntas-3.js (nivel difícil, todos los temas).
+- Las preguntas están en preguntas-1.js (temas 1 a 3), preguntas-2.js (temas 4 a 10) preguntas-3.js (nivel difícil, todos los temas) preguntas-4.js (ampliación) y preguntas-5.js (difíciles, segunda tanda).
 - Formato: B(tema, "T" o "P", "enunciado", "respuesta correcta", ["falsa 1","falsa 2","falsa 3"], "explicación");
   T = teoría, P = supuesto práctico. La app baraja el orden de las opciones.
   En preguntas-3.js se usa D(...) en lugar de B(...): mismo formato, marcada como difícil.
 - Añade las nuevas AL FINAL de su tema, para no cambiar los identificadores de las existentes
   (las estadísticas guardadas dependen de ellos).
-- Después de cualquier cambio, sube el número de VERSION en sw.js (celador-v2 > celador-v3)
+- Después de cualquier cambio, sube el número de VERSION en sw.js (celador-v4 > celador-v5)
   para que los dispositivos instalados descarguen la actualización.
 
 DATOS

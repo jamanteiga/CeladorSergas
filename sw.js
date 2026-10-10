@@ -1,7 +1,7 @@
 /* Service worker: funciona sin conexión y se actualiza solo.
    Al publicar cambios (por ejemplo, nuevas preguntas) sube el número de VERSION. */
-var VERSION = "celador-v2";
-var ARCHIVOS = ["./", "index.html", "app.js", "preguntas-1.js", "preguntas-2.js", "preguntas-3.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
+var VERSION = "celador-v4";
+var ARCHIVOS = ["./", "index.html", "app.js", "preguntas-1.js", "preguntas-2.js", "preguntas-3.js", "preguntas-4.js", "preguntas-5.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(ARCHIVOS); }).then(function () { return self.skipWaiting(); }));
 });
