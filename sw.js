@@ -1,28 +1,21 @@
-const CACHE_NAME = 'brainscan-v12';
-const ASSETS = [
-  'index.html',
-  'style.css',
-  'app.js',
-  'manifest.json'
-];
-
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
-  self.skipWaiting();
+/* Service worker: funciona sin conexión y se actualiza solo.
+   Al publicar cambios (por ejemplo, nuevas preguntas) sube el número de VERSION. */
+var VERSION = "celador-v1";
+var ARCHIVOS = ["./", "index.html", "app.js", "preguntas-1.js", "preguntas-2.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
+self.addEventListener("install", function (e) {
+  e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(ARCHIVOS); }).then(function () { return self.skipWaiting(); }));
 });
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null))
-    ))
-  );
+self.addEventListener("activate", function (e) {
+  e.waitUntil(caches.keys().then(function (ks) {
+    return Promise.all(ks.filter(function (k) { return k !== VERSION; }).map(function (k) { return caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
 });
-
-self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
-  );
+self.addEventListener("fetch", function (e) {
+  if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
+  e.respondWith(caches.open(VERSION).then(function (c) {
+    return c.match(e.request, { ignoreSearch: true }).then(function (guardado) {
+      var red = fetch(e.request).then(function (r) { if (r && r.ok) c.put(e.request, r.clone()); return r; }).catch(function () { return guardado; });
+      return guardado || red;
+    });
+  }));
 });

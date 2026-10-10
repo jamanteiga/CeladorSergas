@@ -1,124 +1,120 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>BrainScan 11 PRO</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <style>
-        :root { --win-blue: #0078d4; --bg: #f3f3f3; }
-        body { background: var(--bg); font-family: -apple-system, sans-serif; margin: 0; padding: 15px; padding-bottom: 100px; }
-        .win-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; border: 1px solid #e5e5e5; }
-        canvas { width: 100%; background: #000; border-radius: 8px; display: block; aspect-ratio: 4/3; object-fit: contain; }
-        .win-taskbar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); padding: 20px; display: flex; justify-content: space-around; border-top: 1px solid #ddd; z-index: 1000; }
-        button { padding: 12px 24px; border-radius: 8px; border: 1px solid #ccc; background: white; font-weight: 600; font-size: 15px; -webkit-appearance: none; }
-        .btn-primary { background: var(--win-blue); color: white; border: none; box-shadow: 0 2px 4px rgba(0,120,212,0.3); }
-        #ocrStatus { font-size: 13px; color: var(--win-blue); margin-top: 10px; text-align: center; font-weight: 500; }
-        #smartSummary { background: #f9f9f9; border: 1px solid #eee; padding: 12px; border-radius: 8px; min-height: 100px; font-size: 15px; margin-top: 10px; line-height: 1.5; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Test Celador SERGAS</title>
+<meta name="description" content="Baterías de test para la parte específica de la oposición de celador/a del SERGAS">
+<meta name="theme-color" content="#6fb544">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Celador">
+<style>
+:root{
+  --verde:#6fb544;--verde-osc:#4f9230;--naranja:#f7a52c;--naranja-osc:#d98a12;
+  --ok:#1f9d55;--ko:#e25555;--bl:#9aa0a6;
+  --fondo:#f3f5f1;--carta:#fff;--tinta:#2b2e33;--tinta2:#6b7078;--linea:#dfe3dc;
+  --ok-f:#e6f6ec;--ko-f:#fdecec;--sel:#eef6e8;
+}
+@media (prefers-color-scheme:dark){:root{
+  --fondo:#15181a;--carta:#1f2326;--tinta:#eceeef;--tinta2:#a3a9b0;--linea:#33393d;
+  --ok-f:#173524;--ko-f:#3d1f1f;--sel:#26331f;--verde:#5a9a36;--verde-osc:#7cc152;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fondo);color:var(--tinta);-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+#app{max-width:860px;margin:0 auto;min-height:100%;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+#app.sin-nav{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.cab{background:var(--verde);color:#fff;padding:calc(22px + env(safe-area-inset-top)) 20px 56px;border-radius:0 0 22px 22px}
+.cab h1{margin:0;font-size:1.45rem;line-height:1.2}
+.cab p{margin:6px 0 0;opacity:.92;font-size:.9rem}
+.cont{padding:0 16px}
+.cab + .cont{margin-top:-38px}
+.carta{background:var(--carta);border:1px solid var(--linea);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 0 rgba(0,0,0,.06)}
+.carta h2{margin:2px 0 4px;font-size:1.08rem}
+.et{color:var(--tinta2);font-size:.88rem}
+.btn{display:block;width:100%;border:0;border-radius:10px;padding:14px 16px;font-weight:700;background:var(--naranja);color:#fff;margin-top:12px}
+.btn:active{background:var(--naranja-osc)}
+.btn.sec{background:transparent;color:var(--tinta);border:1.5px solid var(--linea)}
+.btn.verde{background:var(--verde)}
+.btn.rojo{background:var(--ko)}
+.btn:disabled{opacity:.4;cursor:default}
+.fila{display:flex;gap:10px;align-items:center}
+.fila > *{flex:1}
+.seg{display:flex;background:var(--fondo);border:1px solid var(--linea);border-radius:10px;padding:3px;margin-top:10px}
+.seg button{flex:1;border:0;background:transparent;padding:9px 6px;border-radius:8px;font-size:.9rem;color:var(--tinta2)}
+.seg button.on{background:var(--carta);color:var(--tinta);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:1.5px solid var(--linea);background:transparent;border-radius:999px;padding:6px 11px;font-size:.82rem;color:var(--tinta2)}
+.chip.on{border-color:var(--verde);background:var(--sel);color:var(--tinta);font-weight:600}
+nav.inf{position:fixed;left:0;right:0;bottom:0;background:var(--carta);border-top:1px solid var(--linea);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.inf button{flex:1;max-width:215px;border:0;background:transparent;padding:9px 4px 8px;font-size:.78rem;color:var(--tinta2);display:flex;flex-direction:column;align-items:center;gap:3px}
+nav.inf button.on{color:var(--naranja-osc);font-weight:700}
+nav.inf svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.barra-t{position:sticky;top:0;z-index:4;background:var(--carta);border-bottom:1px solid var(--linea);padding:calc(8px + env(safe-area-inset-top)) 14px 8px;display:flex;align-items:center;gap:10px}
+.barra-t .reloj{font-variant-numeric:tabular-nums;font-weight:700;font-size:1.1rem;margin-left:auto}
+.barra-t .reloj.poco{color:var(--ko)}
+.barra-t button{border:1.5px solid var(--linea);background:transparent;border-radius:8px;padding:7px 11px;font-size:.85rem}
+.prog{height:5px;background:var(--linea)}
+.prog i{display:block;height:100%;background:var(--verde);transition:width .2s}
+.puntos{display:flex;flex-wrap:wrap;gap:5px;padding:12px 16px 4px}
+.puntos button{width:30px;height:30px;border-radius:7px;border:1.5px solid var(--linea);background:var(--carta);font-size:.74rem;padding:0;color:var(--tinta2)}
+.puntos button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.puntos button.ko{background:var(--ko);border-color:var(--ko);color:#fff}
+.puntos button.hecha{background:var(--tinta2);border-color:var(--tinta2);color:#fff}
+.puntos button.act{outline:2.5px solid var(--naranja);outline-offset:1px}
+.preg{font-size:1.06rem;font-weight:600;margin:6px 0 14px}
+.op{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;border:1.5px solid var(--linea);background:var(--carta);border-radius:11px;padding:13px;margin-bottom:9px}
+.op b{flex:none;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--linea);display:grid;place-items:center;font-size:.85rem}
+.op.sel{border-color:var(--verde);background:var(--sel)}
+.op.ok{border-color:var(--ok);background:var(--ok-f)}
+.op.ok b{background:var(--ok);border-color:var(--ok);color:#fff}
+.op.ko{border-color:var(--ko);background:var(--ko-f)}
+.op.ko b{background:var(--ko);border-color:var(--ko);color:#fff}
+.op:disabled{cursor:default;color:inherit;opacity:1}
+.aviso{border-radius:11px;padding:12px 14px;margin:4px 0 12px;font-size:.93rem}
+.aviso.ok{background:var(--ok-f);border:1px solid var(--ok)}
+.aviso.ko{background:var(--ko-f);border:1px solid var(--ko)}
+.aviso.info{background:var(--sel);border:1px solid var(--linea)}
+.aviso strong{display:block;margin-bottom:2px}
+.nota{font-size:2.6rem;font-weight:800;line-height:1}
+.nota small{font-size:1rem;font-weight:500;color:var(--tinta2)}
+.tri{display:flex;gap:4px;height:7px;margin:14px 0 12px}
+.tri i{border-radius:4px;min-width:3px}
+.tres{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tres .n{font-size:1.9rem;font-weight:800;line-height:1.1}
+.tres .n small{font-size:.9rem}
+.tabla{width:100%;border-collapse:collapse;font-size:.88rem}
+.tabla th,.tabla td{padding:7px 4px;border-bottom:1px solid var(--linea);text-align:right}
+.tabla th:first-child,.tabla td:first-child{text-align:left}
+.tabla th{color:var(--tinta2);font-weight:600;font-size:.8rem}
+.tabla tr.clic{cursor:pointer}
+.ley{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--tinta2);margin-top:6px}
+.ley i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.rev{border-top:1px solid var(--linea);padding:12px 0}
+.rev p{margin:0 0 6px}
+.rev .r{font-size:.9rem;margin:2px 0}
+.tag{display:inline-block;font-size:.72rem;border-radius:6px;padding:2px 7px;background:var(--fondo);border:1px solid var(--linea);color:var(--tinta2);margin-right:5px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:grid;place-items:center;padding:20px;z-index:20}
+.modal .carta{max-width:420px;width:100%;margin:0}
+input[type=number],input[type=file]{font:inherit;padding:9px;border:1.5px solid var(--linea);border-radius:8px;background:var(--carta);color:var(--tinta);width:100%}
+h3{font-size:.95rem;margin:16px 0 6px}
+svg.graf{width:100%;height:auto;display:block}
+svg.graf text{fill:var(--tinta2);font-size:11px}
+svg.graf .rej{stroke:var(--linea);stroke-width:1}
+</style>
 </head>
 <body>
-
-    <div class="win-card">
-        <h2 style="margin:0 0 10px 0; font-size: 20px;">🟦 BrainScan 11</h2>
-        <canvas id="mainCanvas"></canvas>
-        <div id="ocrStatus">Esperando imagen...</div>
-    </div>
-
-    <div id="resultCard" class="win-card" style="display:none;">
-        <strong>📝 Esquema generado:</strong>
-        <div id="smartSummary" contenteditable="true"></div>
-    </div>
-
-    <footer class="win-taskbar">
-        <button onclick="document.getElementById('fileInp').click()">📷 Foto</button>
-        <input type="file" id="fileInp" accept="image/*" capture="environment" style="display:none" onchange="handleCapture(event)">
-        <button class="btn-primary" onclick="runSmartOCR()">🔍 Analizar</button>
-        <button onclick="saveAndSend()">📧 Enviar</button>
-    </footer>
-
-    <script>
-        let sessionImages = [];
-
-        function handleCapture(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const canvas = document.getElementById('mainCanvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            img.onload = () => {
-                const maxDim = 1200;
-                let w = img.width, h = img.height;
-                if (w > h && w > maxDim) { h *= maxDim/w; w = maxDim; }
-                else if (h > maxDim) { w *= maxDim/h; h = maxDim; }
-                canvas.width = w; canvas.height = h;
-                ctx.drawImage(img, 0, 0, w, h);
-                sessionImages.push(canvas.toDataURL('image/jpeg', 0.8));
-                document.getElementById('ocrStatus').innerText = "✅ Imagen cargada";
-            };
-            img.src = URL.createObjectURL(file);
-        }
-
-        async function runSmartOCR() {
-            const status = document.getElementById('ocrStatus');
-            const canvas = document.getElementById('mainCanvas');
-            
-            if (canvas.width === 0) {
-                alert("Primero saca una foto");
-                return;
-            }
-
-            status.innerText = "⏳ Inicializando motor...";
-            
-            try {
-                // Configuración manual del worker para evitar errores en Safari
-                const worker = await Tesseract.createWorker({
-                    logger: m => {
-                        if(m.status === 'initializing api') status.innerText = "⏳ Cargando Diccionarios...";
-                        if(m.status === 'recognizing text') status.innerText = `⏳ Analizando: ${Math.round(m.progress * 100)}%`;
-                    }
-                });
-
-                await worker.loadLanguage('spa');
-                await worker.initialize('spa');
-                const { data: { text } } = await worker.recognize(canvas);
-                await worker.terminate();
-
-                if(!text || text.trim().length < 2) {
-                    status.innerText = "⚠️ No se detectó texto claro.";
-                    return;
-                }
-
-                document.getElementById('resultCard').style.display = 'block';
-                const lines = text.split('\n').filter(l => l.trim().length > 5);
-                const html = "<ul>" + lines.map(l => `<li>${l}</li>`).join('') + "</ul>";
-                document.getElementById('smartSummary').innerHTML += html;
-                status.innerText = "✅ ¡Hecho!";
-                
-            } catch (err) {
-                console.error(err);
-                status.innerText = "❌ Error de conexión o memoria. Reintenta.";
-                alert("Error técnico: " + err.message);
-            }
-        }
-
-        async function saveAndSend() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            doc.text("Resumen BrainScan", 20, 20);
-            const content = document.getElementById('smartSummary').innerText;
-            doc.text(doc.splitTextToSize(content, 170), 20, 30);
-            sessionImages.forEach(img => { doc.addPage(); doc.addImage(img, 'JPEG', 10, 10, 190, 0); });
-            
-            const pdfBlob = doc.output('blob');
-            const file = new File([pdfBlob], "Apuntes.pdf", { type: "application/pdf" });
-            if (navigator.share) await navigator.share({ files: [file], title: 'Mis Apuntes' });
-            else doc.save("Apuntes.pdf");
-        }
-    </script>
+<div id="app"></div>
+<nav class="inf" id="nav"></nav>
+<div id="modal"></div>
+<script src="preguntas-1.js"></script>
+<script src="preguntas-2.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

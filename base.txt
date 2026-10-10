@@ -1,0 +1,36 @@
+Necesito una app para realizar test para ope celador 2026 de Galicia. 
+Toma como base el temario de celador oficial de la convocatoria del sergas de la parte especifica del temario, no del temario común.
+
+Como criterio, y teniendo también en cuenta preguntas realizadas en oposiciones del Sergas a celador de años anteriores (cuantas más preguntas de oposiciones de años anteriores mejor), también has de realizar
+preguntas que tu consideres importantes en base a todo el temario especifico, incluso siendo rebuscadas.
+Para saber el número de preguntas has de ir a las bases de la convocatoria del año 2025; también se tendrán en cuenta años anteriores.
+
+Bien, para el refuerzo de contenidos, necesito que me hagas baterías de 30 preguntas de cada vez, donde se han de considerar los siguientes criterios:
+
+	1. Cada pregunta tendrá 4 posibles respuestas, de las cuales solamente una es correcta. 
+	2. Podrá haber preguntas, donde se solicite que se indique cual es la respuesta falsa, para dar más verosimilitud al test.
+	3. Pregunta acertada, 0,5 puntos. Pregunta fallada -0,15 puntos. Pregunta en blanco 0 puntos.
+	4. Tiempo estimado de respuesta para las 30 preguntas 15 minutos. El tiempo es de 15 minutos para las 30 preguntas, no hay tiempo límite por pregunta.
+		Si a los 15 minutos quedan preguntas sin contestar, se cierra el test, y se le indica al usuario la nota.
+	5. Las preguntas se crearán en modo aleatorio, por ejemplo, se puede alternar una pregunta que tenga que ver con el quirófano, y después una que por 
+		ejemplo tenga que ver con una tanatopraxia.
+	6. Considera la presentación de las preguntas de acuerdo a la web opositatest. Considerar para ello foto adjunta.
+
+	7. Al cumplimentar una respuesta, antes de acceder a la siguiente pregunta, dirás si la pregunta contestada es correcta o incorrecta.
+	   Tendrás dos botones "Anterior" y "Siguiente" por si se quiere pasar a una siguiente pregunta, dejando alguna el blanco, o bien clicar
+		en anterior, por si se quiere volver a una pregunta anterior sin contestar. Si antes o después hay preguntas contestadas correcta o incorrectamente, la saltarás
+		e iras a la que esté en blanco, tanto antes como después.
+
+	8. Queremos realizar una seguimiento estadístico, donde se indique la evolución (mejora o empeoramiento) de los test realizados.
+		Es decir, cuando se hace un test, se ha de guardar, y analizar las estadísticas del mismo de acuerdo a foto proporcionada.
+			- Preguntas acertadas por batería.
+			- Preguntas falladas por batería.
+			- Preguntas sin contestar.
+			- Tiempo por pregunta.
+			- Los tres primeros puntos de 8. se indicarán también en tanto por ciento.
+	9. Podrás generar baterías de 30 preguntas, tantas como el usuario quiera.
+		De una batería a otra, se pueden repetir preguntas por ejemplo preguntas que han sido falladas, para posterior refuerzo de conocimiento.
+
+
+Si encuentras alguna incongruencia en mi planteamiento, infórmame al respecto, lo analizo y te doy una respuesta.
+También lo puede analizar tu, y darme opciones.
