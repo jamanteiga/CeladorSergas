@@ -18,7 +18,7 @@ function lee(k, def) { try { var v = localStorage.getItem("celador." + k); retur
 function guarda(k, v) { try { localStorage.setItem("celador." + k, JSON.stringify(v)); } catch (e) {} }
 function borra(k) { try { localStorage.removeItem("celador." + k); } catch (e) {} }
 
-var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = []; if (!cfg.nivel) cfg.nivel = "X";
+var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = []; if (!cfg.nivel) cfg.nivel = "X"; if (typeof cfg.nombre !== "string") cfg.nombre = "Belén";
 var hist = lee("hist", []), est = lee("q", {}), cur = lee("cur", null);
 var vista = { v: "inicio", tab: "est", per: 7, graf: "pct", res: null, filtro: "todas" }, tic = null, visto = 0;
 
@@ -41,7 +41,7 @@ function ponderadas(pool, n) { // prioriza las menos vistas
   }).sort(function (a, b) { return b.k - a.k; }).slice(0, n).map(function (x) { return x.p; });
 }
 function enPool(p) { // filtros de la batería: tipo, temas y nivel
-  return (cfg.tipo === "M" || p.k === cfg.tipo) && (!cfg.temas.length || cfg.temas.indexOf(p.t) >= 0) && (cfg.nivel !== "D" || p.d === 1);
+  return (cfg.tipo === "M" || p.k === cfg.tipo) && (!cfg.temas.length || cfg.temas.indexOf(p.t) >= 0) && (cfg.nivel !== "D" || p.d === 1) && (cfg.nivel !== "K" || p.tec === 1);
 }
 function eligeBateria() {
   var pool = BANCO.filter(enPool);
@@ -50,7 +50,9 @@ function eligeBateria() {
   var ids = {}; fall.forEach(function (p) { ids[p.id] = 1; });
   var libres = pool.filter(function (p) { return !ids[p.id]; }), falta = n - fall.length, resto;
   if (cfg.nivel === "X") { // unas dos de cada tres, difíciles
-    var dif = ponderadas(libres.filter(function (p) { return p.d === 1; }), Math.round(falta * 2 / 3));
+    var cupo = Math.round(falta * 2 / 3), dif = ponderadas(libres.filter(function (p) { return p.tec === 1; }), Math.round(cupo / 2)); // la mitad del cupo, técnicas
+    dif.forEach(function (p) { ids[p.id] = 1; });
+    dif = dif.concat(ponderadas(libres.filter(function (p) { return p.d === 1 && !ids[p.id]; }), cupo - dif.length));
     dif.forEach(function (p) { ids[p.id] = 1; });
     resto = dif.concat(ponderadas(libres.filter(function (p) { return !ids[p.id]; }), falta - dif.length));
   } else resto = ponderadas(libres, falta);
@@ -85,14 +87,19 @@ function empieza(modo) {
   };
   guarda("cur", cur); visto = ahora; ir("test");
 }
+function enPausa() { return cur && cur.rest != null; }
+function resta() { return enPausa() ? cur.rest : cur.fin - Date.now(); } // milisegundos que quedan
+function pausa() { if (enPausa()) return; acumula(); cur.rest = Math.max(0, cur.fin - Date.now()); visto = 0; guarda("cur", cur); }
+function reanuda() { if (!enPausa()) return; cur.fin = Date.now() + cur.rest; delete cur.rest; visto = Date.now(); guarda("cur", cur); }
 function acumula() { // suma el tiempo de la pregunta en pantalla
-  if (!cur) return; var ahora = Math.min(Date.now(), cur.fin);
+  if (!cur || enPausa()) return; var ahora = Math.min(Date.now(), cur.fin);
   if (visto && !(cur.inm && cur.r[cur.i] >= 0 && cur.fijado)) cur.tq[cur.i] += Math.max(0, ahora - visto);
   visto = ahora;
 }
-function mueve(i) { acumula(); cur.fijado = cur.inm && cur.r[i] >= 0; cur.i = i; guarda("cur", cur); pinta(); window.scrollTo(0, 0); }
+function mueve(i) { reanuda(); acumula(); cur.fijado = cur.inm && cur.r[i] >= 0; cur.i = i; guarda("cur", cur); pinta(); window.scrollTo(0, 0); }
 function blanco(desde, dir) { for (var j = desde + dir; j >= 0 && j < cur.r.length; j += dir) if (cur.r[j] < 0) return j; return -1; }
 function responde(j) {
+  if (!(cur.inm && cur.r[cur.i] >= 0)) reanuda();
   if (cur.inm) { if (cur.r[cur.i] >= 0) return; acumula(); cur.r[cur.i] = j; cur.fijado = true; }
   else { cur.r[cur.i] = cur.r[cur.i] === j ? -1 : j; }
   guarda("cur", cur); pinta();
@@ -105,7 +112,7 @@ function finaliza(agotado) {
     if (orig < 0) bl++; else { tResp += cur.tq[i]; if (orig === 0) { ok++; e.ok++; e.u = 1; } else { ko++; e.ko++; e.u = 0; } }
     det.push([q.id, orig, Math.round(cur.tq[i] / 100) / 10]);
   });
-  var n = cur.ps.length, seg = Math.min(cur.dur, Math.round((Date.now() - cur.t0) / 1000));
+  var n = cur.ps.length, seg = Math.max(0, Math.min(cur.dur, Math.round(cur.dur - resta() / 1000)));
   var h = { id: Date.now(), ts: Date.now(), modo: cur.modo, n: n, ok: ok, ko: ko, bl: bl, pen: cur.pen,
     pts: ok * ACIERTO - ko * cur.pen, max: n * ACIERTO, seg: seg, tpp: ok + ko ? tResp / 1000 / (ok + ko) : 0, agot: !!agotado, det: det };
   hist.push(h); guarda("hist", hist); guarda("q", est); cur = null; borra("cur");
@@ -133,11 +140,11 @@ function vInicio() {
   var pool = BANCO.filter(enPool).length, nD = BANCO.filter(function (p) { return p.d === 1; }).length;
   var nb = Math.min(N_BAT, BANCO.length), h = "";
   h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)</p></header><div class=\"cont\">";
-  if (cur) h += '<div class="carta"><div class="et">Test en curso</div><h2>Tienes un ' + MODOS[cur.modo].toLowerCase() + ' sin terminar</h2><div class="et">El tiempo sigue corriendo: quedan ' + mmss((cur.fin - Date.now()) / 1000) +
+  if (cur) h += '<div class="carta"><div class="et">Test en curso</div><h2>Tienes un ' + MODOS[cur.modo].toLowerCase() + ' sin terminar</h2><div class="et">' + (enPausa() ? "En pausa: quedan " : "El tiempo sigue corriendo: quedan ") + mmss(resta() / 1000) +
     '</div><div class="fila"><button class="btn" data-a="continuar">Continuar</button><button class="btn sec" data-a="descartar">Descartar</button></div></div>';
   h += '<div class="carta"><div class="et">Entrenador</div><h2>Batería de ' + nb + ' preguntas</h2><div class="et">' + mmss(nb * SEG_PREG) + " min · acierto +0,5 · fallo −" + num(cfg.pen, 3) + " · en blanco 0</div>";
   h += '<div class="seg">' + [["M", "Mixto"], ["T", "Teoría"], ["P", "Supuestos"]].map(function (o) { return '<button data-a="tipo" data-v="' + o[0] + '" class="' + (cfg.tipo === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
-  h += '<div class="seg">' + [["T", "Todas"], ["X", "Más difíciles"], ["D", "Solo difíciles"]].map(function (o) { return '<button data-a="nivel" data-v="' + o[0] + '" class="' + (cfg.nivel === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
+  h += '<div class="seg">' + [["T", "Todas"], ["X", "Mezcla"], ["D", "Difíciles"], ["K", "Técnicas"]].map(function (o) { return '<button data-a="nivel" data-v="' + o[0] + '" class="' + (cfg.nivel === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
   h += '<div class="chips"><button class="chip ' + (cfg.temas.length ? "" : "on") + '" data-a="tema" data-v="0">Todos los temas</button>' + Object.keys(TEMAS).map(function (t) {
     return '<button class="chip ' + (cfg.temas.indexOf(+t) >= 0 ? "on" : "") + '" data-a="tema" data-v="' + t + '" title="' + esc(TEMAS[t]) + '">T' + t + "</button>"; }).join("") + "</div>";
   if (pool < N_BAT) h += '<div class="aviso info" style="margin-top:10px"><strong>Solo hay ' + pool + ' preguntas con estos filtros</strong>La batería se completa hasta ' + nb + ' con otras preguntas' + (cfg.temas.length ? " de los mismos temas." : ".") + "</div>";
@@ -156,11 +163,12 @@ function vInicio() {
 function vTest() {
   var n = cur.ps.length, i = cur.i, q = cur.ps[i], p = PORID[q.id], r = cur.r[i], resuelta = cur.inm && r >= 0;
   var hechas = cur.r.filter(function (x) { return x >= 0; }).length, h = "";
-  h += '<div class="barra-t"><button data-a="salir">Finalizar</button><span>' + (i + 1) + " / " + n + '</span><span class="reloj" id="reloj"></span></div>';
+  h += '<div class="barra-t"><button data-a="salir">Finalizar</button><span>' + (i + 1) + " / " + n + '</span><button data-a="pausa" style="margin-left:auto">' + (enPausa() ? "Reanudar" : "Pausar") + '</button><span class="reloj" id="reloj" style="margin-left:0"></span></div>';
+  if (enPausa()) h += '<div class="aviso info" style="margin:10px 16px 0" role="status"><strong>Tiempo en pausa</strong>Se reanuda solo al contestar, al cambiar de pregunta o al pulsar Reanudar.</div>';
   h += '<div class="prog"><i style="width:' + pct(hechas, n) + '%"></i></div><div class="puntos">' + cur.ps.map(function (x, j) {
     var c = ""; if (cur.r[j] >= 0) c = cur.inm ? (x.ord[cur.r[j]] === 0 ? "ok" : "ko") : "hecha";
     return '<button data-a="salta" data-v="' + j + '" class="' + c + (j === i ? " act" : "") + '" aria-label="Pregunta ' + (j + 1) + '">' + (j + 1) + "</button>"; }).join("") + "</div>";
-  h += '<div class="cont" style="padding-top:10px"><span class="tag">Tema ' + p.t + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
+  h += '<div class="cont" style="padding-top:10px"><span class="tag">Tema ' + p.t + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.tec ? '<span class="tag">Técnica</span>' : p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
   q.ord.forEach(function (o, j) {
     var c = ""; if (resuelta) { if (o === 0) c = "ok"; else if (j === r) c = "ko"; } else if (j === r) c = "sel";
     h += '<button class="op ' + c + '" data-a="resp" data-v="' + j + '"' + (resuelta ? " disabled" : "") + "><b>" + "ABCD"[j] + "</b><span>" + esc(p.o[o]) + "</span></button>";
@@ -177,7 +185,7 @@ function vTest() {
   if (hechas === n || (!cur.inm && i === n - 1)) h += '<button class="btn verde" data-a="' + (hechas === n ? "fin" : "salir") + '">Terminar y ver resultado</button>';
   $app.innerHTML = h + "</div>";
   var $r = document.getElementById("reloj");
-  function reloj() { if (!cur) return; var s = (cur.fin - Date.now()) / 1000; if (s <= 0) return finaliza(true); $r.textContent = mmss(s); $r.className = "reloj" + (s < 60 ? " poco" : ""); }
+  function reloj() { if (!cur) return; var s = resta() / 1000; if (s <= 0 && !enPausa()) return finaliza(true); $r.textContent = mmss(cur.dur - s) + " / " + mmss(cur.dur); $r.className = "reloj" + (enPausa() ? " pausa" : s < 60 ? " poco" : ""); }
   reloj(); if (cur) tic = setInterval(reloj, 500);
 }
 
@@ -273,6 +281,7 @@ function vAct() {
 function vAjustes() {
   var h = '<header class="cab"><h1>Ajustes</h1><p>Los datos se guardan solo en este dispositivo</p></header><div class="cont">';
   h += '<div class="carta"><h2>Puntuación</h2><div class="et">Acierto +0,5. En blanco 0. En el examen el fallo resta 1/4 del valor del acierto (0,125).</div><h3>Penalización por fallo</h3><input type="number" id="pen" min="0" max="0.5" step="0.005" value="' + cfg.pen + '"><button class="btn sec" data-a="pen">Guardar penalización</button></div>';
+  h += '<div class="carta"><h2>Mensaje de ánimo</h2><div class="et">Nombre que aparece en el mensaje al empezar cada test. Déjalo vacío para un mensaje sin nombre.</div><h3>Nombre</h3><input type="text" id="nombre" maxlength="30" value="' + esc(cfg.nombre) + '" style="font:inherit;padding:9px;border:1.5px solid var(--linea);border-radius:8px;background:var(--carta);color:var(--tinta);width:100%"><button class="btn sec" data-a="nombre">Guardar nombre</button></div>';
   h += '<div class="carta"><h2>Copia de seguridad</h2><div class="et">Exporta el historial para llevarlo a otro dispositivo o guardarlo.</div><button class="btn sec" data-a="exporta">Exportar copia</button><h3>Importar copia</h3><input type="file" id="imp" accept="application/json,.json"><button class="btn rojo" data-a="borra">Borrar todos los datos</button></div>';
   h += '<div class="carta"><h2>Banco de preguntas</h2><table class="tabla"><tr><th>Tema</th><th>Teoría</th><th>Supuestos</th><th>Difíciles</th></tr>' + Object.keys(TEMAS).map(function (t) {
     var a = BANCO.filter(function (p) { return p.t === +t; }), s = a.filter(function (p) { return p.k === "P"; }).length;
@@ -296,6 +305,13 @@ function exporta() {
 /* ---------- diálogos ---------- */
 var accionModal = null;
 function confirma(txt, boton, fn) { accionModal = fn; $modal.innerHTML = '<div class="modal"><div class="carta"><p style="margin-top:0">' + esc(txt) + '</p><div class="fila"><button class="btn sec" data-a="mno">Cancelar</button><button class="btn" data-a="msi">' + esc(boton) + "</button></div></div></div>"; }
+var ANIMOS = ["¡Ánimo, {n}, tú puedes!", "¡A por ello, {n}!", "¡Vamos, {n}, que esta plaza es tuya!", "{n}, respira hondo y a por todas.", "¡Tú puedes con esto y con más, {n}!", "Cada test te acerca a la plaza, {n}. ¡Adelante!", "¡Confía en ti, {n}! Lo llevas bien preparado.", "¡Mucha fuerza, {n}! Pregunta a pregunta."];
+function animo(fn) { // mensaje de ánimo antes de empezar; el tiempo arranca al pulsar el botón
+  var n = (cfg.nombre || "").trim(), t = ANIMOS[Math.floor(Math.random() * ANIMOS.length)];
+  t = n ? t.replace("{n}", n) : ["¡Ánimo, tú puedes!", "¡A por ello!", "¡Vamos, que esta plaza es tuya!", "Respira hondo y a por todas.", "¡Confía en ti! Lo llevas bien preparado."][Math.floor(Math.random() * 5)];
+  accionModal = fn;
+  $modal.innerHTML = '<div class="modal"><div class="carta" style="text-align:center" role="dialog" aria-live="polite"><p style="font-size:1.35rem;font-weight:800;margin:6px 0 4px">' + esc(t) + '</p><p class="et" style="margin:0">El tiempo empieza al pulsar el botón.</p><button class="btn" data-a="msi">¡Vamos!</button></div></div>';
+}
 function avisa(txt) { accionModal = null; $modal.innerHTML = '<div class="modal"><div class="carta"><p style="margin-top:0">' + esc(txt) + '</p><button class="btn" data-a="mno">Aceptar</button></div></div>'; }
 
 /* ---------- eventos ---------- */
@@ -304,8 +320,9 @@ var AC = {
   tipo: function (v) { cfg.tipo = v; guarda("cfg", cfg); pinta(); },
   nivel: function (v) { cfg.nivel = v; guarda("cfg", cfg); pinta(); },
   tema: function (v) { v = +v; if (!v) cfg.temas = []; else { var k = cfg.temas.indexOf(v); if (k >= 0) cfg.temas.splice(k, 1); else cfg.temas.push(v); cfg.temas.sort(function (a, b) { return a - b; }); } guarda("cfg", cfg); pinta(); },
-  empieza: function (v) { if (!cur) empieza(v); },
-  continuar: function () { visto = Date.now(); if (cur.fin <= Date.now()) finaliza(true); else ir("test"); },
+  empieza: function (v) { if (!cur) animo(function () { empieza(v); }); },
+  continuar: function () { if (!enPausa()) visto = Date.now(); if (resta() <= 0 && !enPausa()) finaliza(true); else ir("test"); },
+  pausa: function () { if (enPausa()) reanuda(); else pausa(); pinta(); },
   descartar: function () { confirma("Se descartará el test en curso sin guardarlo.", "Descartar", function () { cur = null; borra("cur"); pinta(); }); },
   resp: function (v) { responde(+v); },
   salta: function (v) { if (+v >= 0) mueve(+v); },
@@ -317,6 +334,7 @@ var AC = {
   graf: function (v) { vista.graf = v; pinta(); },
   ver: function (v) { vista.res = hist.filter(function (h) { return h.id === +v; })[0]; vista.filtro = "todas"; ir("res"); },
   pen: function () { var v = parseFloat(String(document.getElementById("pen").value).replace(",", ".")); if (isNaN(v) || v < 0 || v > 0.5) return avisa("Introduce un valor entre 0 y 0,5."); cfg.pen = v; guarda("cfg", cfg); avisa("Penalización guardada: −" + num(v, 3) + " por fallo. Se aplicará a los próximos test."); },
+  nombre: function () { cfg.nombre = String(document.getElementById("nombre").value).trim(); guarda("cfg", cfg); avisa(cfg.nombre ? "Guardado. Los mensajes dirán: " + cfg.nombre + "." : "Guardado. Los mensajes irán sin nombre."); },
   exporta: exporta,
   borra: function () { confirma("Se borrarán el historial y las estadísticas de este dispositivo. No se puede deshacer.", "Borrar", function () { hist = []; est = {}; cur = null; borra("hist"); borra("q"); borra("cur"); ir("inicio"); }); },
   mno: function () { $modal.innerHTML = ""; accionModal = null; },
@@ -328,7 +346,7 @@ document.addEventListener("click", function (ev) {
 });
 document.addEventListener("visibilitychange", function () {
   if (!cur || vista.v !== "test") return;
-  if (document.hidden) { acumula(); visto = 0; guarda("cur", cur); } else { visto = Date.now(); if (cur.fin <= Date.now()) finaliza(true); }
+  if (document.hidden) { acumula(); visto = 0; guarda("cur", cur); } else if (!enPausa()) { visto = Date.now(); if (cur.fin <= Date.now()) finaliza(true); }
 });
 window.addEventListener("pagehide", function () { if (cur && vista.v === "test") { acumula(); guarda("cur", cur); } });
 
