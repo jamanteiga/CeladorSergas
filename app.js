@@ -54,7 +54,15 @@ function eligeBateria() {
     dif.forEach(function (p) { ids[p.id] = 1; });
     resto = dif.concat(ponderadas(libres.filter(function (p) { return !ids[p.id]; }), falta - dif.length));
   } else resto = ponderadas(libres, falta);
-  return baraja(fall.concat(resto));
+  var lista = fall.concat(resto);
+  lista.forEach(function (p) { ids[p.id] = 1; });
+  // Garantiza siempre N_BAT preguntas: primero con lo que quede del filtro, después con otras
+  // de los mismos temas (cualquier tipo o nivel) y, por último, con cualquier pregunta del banco.
+  [pool, BANCO.filter(function (p) { return !cfg.temas.length || cfg.temas.indexOf(p.t) >= 0; }), BANCO].forEach(function (fuente) {
+    if (lista.length >= N_BAT) return;
+    ponderadas(fuente.filter(function (p) { return !ids[p.id]; }), N_BAT - lista.length).forEach(function (p) { ids[p.id] = 1; lista.push(p); });
+  });
+  return baraja(lista);
 }
 function eligeSimulacro() {
   var t = baraja(ponderadas(BANCO.filter(function (p) { return p.k === "T"; }), SIM_T));
@@ -123,7 +131,7 @@ function pinta() {
 function vInicio() {
   var nT = BANCO.filter(function (p) { return p.k === "T"; }).length, nP = BANCO.length - nT, pend = falladasPend().length;
   var pool = BANCO.filter(enPool).length, nD = BANCO.filter(function (p) { return p.d === 1; }).length;
-  var nb = Math.min(N_BAT, pool), h = "";
+  var nb = Math.min(N_BAT, BANCO.length), h = "";
   h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)</p></header><div class=\"cont\">";
   if (cur) h += '<div class="carta"><div class="et">Test en curso</div><h2>Tienes un ' + MODOS[cur.modo].toLowerCase() + ' sin terminar</h2><div class="et">El tiempo sigue corriendo: quedan ' + mmss((cur.fin - Date.now()) / 1000) +
     '</div><div class="fila"><button class="btn" data-a="continuar">Continuar</button><button class="btn sec" data-a="descartar">Descartar</button></div></div>';
@@ -132,6 +140,7 @@ function vInicio() {
   h += '<div class="seg">' + [["T", "Todas"], ["X", "Más difíciles"], ["D", "Solo difíciles"]].map(function (o) { return '<button data-a="nivel" data-v="' + o[0] + '" class="' + (cfg.nivel === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
   h += '<div class="chips"><button class="chip ' + (cfg.temas.length ? "" : "on") + '" data-a="tema" data-v="0">Todos los temas</button>' + Object.keys(TEMAS).map(function (t) {
     return '<button class="chip ' + (cfg.temas.indexOf(+t) >= 0 ? "on" : "") + '" data-a="tema" data-v="' + t + '" title="' + esc(TEMAS[t]) + '">T' + t + "</button>"; }).join("") + "</div>";
+  if (pool < N_BAT) h += '<div class="aviso info" style="margin-top:10px"><strong>Solo hay ' + pool + ' preguntas con estos filtros</strong>La batería se completa hasta ' + nb + ' con otras preguntas' + (cfg.temas.length ? " de los mismos temas." : ".") + "</div>";
   if (cfg.temas.length) h += '<div class="et" style="margin-top:8px">' + cfg.temas.map(function (t) { return "T" + t + ": " + TEMAS[t]; }).join(" · ") + "</div>";
   h += '<button class="btn" data-a="empieza" data-v="bateria"' + (nb && !cur ? "" : " disabled") + ">Empieza tu práctica</button></div>";
   h += '<div class="carta"><div class="et">Refuerzo</div><h2>Repaso de falladas</h2><div class="et">' + (pend ? pend + " preguntas pendientes de acertar. Batería de " + Math.min(N_BAT, pend) + "." : "No tienes preguntas falladas pendientes.") +
