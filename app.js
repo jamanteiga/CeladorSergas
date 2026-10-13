@@ -2,6 +2,7 @@
 (function () {
 "use strict";
 
+var VERSION_APP = 9;
 var ACIERTO = 0.5, SEG_PREG = 30, N_BAT = 50, SIM_T = 50, SIM_P = 50, SIM_MIN = 150;
 var TEMAS = {
   1: "Funciones, vigilancia y accesos", 2: "Utensilios y mobiliario", 3: "Movilización y traslados",
@@ -139,7 +140,7 @@ function vInicio() {
   var nT = BANCO.filter(function (p) { return p.k === "T"; }).length, nP = BANCO.length - nT, pend = falladasPend().length;
   var pool = BANCO.filter(enPool).length, nD = BANCO.filter(function (p) { return p.d === 1; }).length;
   var nb = Math.min(N_BAT, BANCO.length), h = "";
-  h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)</p></header><div class=\"cont\">";
+  h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)<br>Versión " + VERSION_APP + "</p></header><div class=\"cont\">";
   if (cur) h += '<div class="carta"><div class="et">Test en curso</div><h2>Tienes un ' + MODOS[cur.modo].toLowerCase() + ' sin terminar</h2><div class="et">' + (enPausa() ? "En pausa: quedan " : "El tiempo sigue corriendo: quedan ") + mmss(resta() / 1000) +
     '</div><div class="fila"><button class="btn" data-a="continuar">Continuar</button><button class="btn sec" data-a="descartar">Descartar</button></div></div>';
   h += '<div class="carta"><div class="et">Entrenador</div><h2>Batería de ' + nb + ' preguntas</h2><div class="et">' + mmss(nb * SEG_PREG) + " min · acierto +0,5 · fallo −" + num(cfg.pen, 3) + " · en blanco 0</div>";
@@ -163,7 +164,7 @@ function vInicio() {
 function vTest() {
   var n = cur.ps.length, i = cur.i, q = cur.ps[i], p = PORID[q.id], r = cur.r[i], resuelta = cur.inm && r >= 0;
   var hechas = cur.r.filter(function (x) { return x >= 0; }).length, h = "";
-  h += '<div class="barra-t"><button data-a="salir">Finalizar</button><span>' + (i + 1) + " / " + n + '</span><button data-a="pausa" style="margin-left:auto">' + (enPausa() ? "Reanudar" : "Pausar") + '</button><span class="reloj" id="reloj" style="margin-left:0"></span></div>';
+  h += '<div class="barra-t"><button data-a="salir">Finalizar</button><span>' + (i + 1) + " / " + n + '</span><button data-a="pausa" class="bpausa' + (enPausa() ? " on" : "") + '" style="margin-left:auto" aria-pressed="' + (enPausa() ? "true" : "false") + '">' + (enPausa() ? "▶ Reanudar" : "⏸ Parar") + '</button><span class="reloj" id="reloj" style="margin-left:0"></span></div>';
   if (enPausa()) h += '<div class="aviso info" style="margin:10px 16px 0" role="status"><strong>Tiempo en pausa</strong>Se reanuda solo al contestar, al cambiar de pregunta o al pulsar Reanudar.</div>';
   h += '<div class="prog"><i style="width:' + pct(hechas, n) + '%"></i></div><div class="puntos">' + cur.ps.map(function (x, j) {
     var c = ""; if (cur.r[j] >= 0) c = cur.inm ? (x.ord[cur.r[j]] === 0 ? "ok" : "ko") : "hecha";
