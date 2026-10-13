@@ -2,14 +2,21 @@
 (function () {
 "use strict";
 
-var VERSION_APP = 9;
-var ACIERTO = 0.5, SEG_PREG = 30, N_BAT = 50, SIM_T = 50, SIM_P = 50, SIM_MIN = 150;
+var VERSION_APP = 11;
+var ACIERTO = 0.5, SEG_PREG = 30, N_BAT = 50, SIM_T = 50, SIM_P = 50, SIM_MIN = 150, SIMC_N = 10, SIMC_MIN = 15;
 var TEMAS = {
   1: "Funciones, vigilancia y accesos", 2: "Utensilios y mobiliario", 3: "Movilización y traslados",
   4: "Quirófano, hospitalización y salud mental", 5: "Fallecidos, autopsias y mortuorio",
   6: "Suministros y almacén", 7: "Farmacia, esterilización, higiene y reprografía",
-  8: "Urgencias y ambulancias", 9: "Informática", 10: "Género y violencia de género"
+  8: "Urgencias y ambulancias", 9: "Informática", 10: "Género y violencia de género",
+  101: "Constitución Española de 1978", 102: "Estatuto de Autonomía de Galicia",
+  103: "Ley General de Sanidad", 104: "Ley de Salud de Galicia y SERGAS",
+  105: "Estatuto Marco (Ley 55/2003)", 106: "Selección y provisión (Decreto 206/2005)",
+  107: "Protección de datos, consentimiento e historia clínica", 108: "PRL, igualdad y violencia de género"
 };
+var PARTES = { E: "Parte específica", C: "Parte común" };
+function parteDe(t) { return t > 100 ? "C" : "E"; }
+function etq(t) { t = +t; return t > 100 ? "C" + (t - 100) : "T" + t; }
 var MODOS = { bateria: "Batería", falladas: "Repaso", simulacro: "Simulacro" };
 var BANCO = window.BANCO || [], PORID = {};
 BANCO.forEach(function (p) { PORID[p.id] = p; });
@@ -19,9 +26,9 @@ function lee(k, def) { try { var v = localStorage.getItem("celador." + k); retur
 function guarda(k, v) { try { localStorage.setItem("celador." + k, JSON.stringify(v)); } catch (e) {} }
 function borra(k) { try { localStorage.removeItem("celador." + k); } catch (e) {} }
 
-var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = []; if (!cfg.nivel) cfg.nivel = "X"; if (typeof cfg.nombre !== "string") cfg.nombre = "Belén";
+var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = []; if (!cfg.nivel) cfg.nivel = "X"; if (typeof cfg.nombre !== "string") cfg.nombre = "Belén"; if (cfg.parte !== "C") cfg.parte = "E";
 var hist = lee("hist", []), est = lee("q", {}), cur = lee("cur", null);
-var vista = { v: "inicio", tab: "est", per: 7, graf: "pct", res: null, filtro: "todas" }, tic = null, visto = 0;
+var vista = { v: "inicio", tab: "est", per: 7, graf: "pct", res: null, filtro: "todas", parte: cfg.parte }, tic = null, visto = 0;
 
 /* ---------- utilidades ---------- */
 var $app = document.getElementById("app"), $nav = document.getElementById("nav"), $modal = document.getElementById("modal");
@@ -32,7 +39,9 @@ function mmss(s) { s = Math.max(0, Math.round(s)); var m = Math.floor(s / 60); r
 function fecha(ts) { var d = new Date(ts); return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }); }
 function baraja(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 function tema(id) { return Math.floor(id / 1000); }
-function falladasPend() { return BANCO.filter(function (p) { return est[p.id] && est[p.id].u === 0; }); }
+function BP() { return BANCO.filter(function (p) { return parteDe(p.t) === cfg.parte; }); } // banco de la parte elegida
+function tSel() { return cfg.temas.filter(function (t) { return parteDe(t) === cfg.parte; }); }
+function falladasPend() { return BP().filter(function (p) { return est[p.id] && est[p.id].u === 0; }); }
 
 /* ---------- selección de preguntas ---------- */
 function ponderadas(pool, n) { // prioriza las menos vistas
@@ -42,7 +51,8 @@ function ponderadas(pool, n) { // prioriza las menos vistas
   }).sort(function (a, b) { return b.k - a.k; }).slice(0, n).map(function (x) { return x.p; });
 }
 function enPool(p) { // filtros de la batería: tipo, temas y nivel
-  return (cfg.tipo === "M" || p.k === cfg.tipo) && (!cfg.temas.length || cfg.temas.indexOf(p.t) >= 0) && (cfg.nivel !== "D" || p.d === 1) && (cfg.nivel !== "K" || p.tec === 1);
+  var ts = tSel();
+  return parteDe(p.t) === cfg.parte && (cfg.tipo === "M" || p.k === cfg.tipo) && (!ts.length || ts.indexOf(p.t) >= 0) && (cfg.nivel !== "D" || p.d === 1) && (cfg.nivel !== "K" || p.tec === 1);
 }
 function eligeBateria() {
   var pool = BANCO.filter(enPool);
@@ -61,13 +71,15 @@ function eligeBateria() {
   lista.forEach(function (p) { ids[p.id] = 1; });
   // Garantiza siempre N_BAT preguntas: primero con lo que quede del filtro, después con otras
   // de los mismos temas (cualquier tipo o nivel) y, por último, con cualquier pregunta del banco.
-  [pool, BANCO.filter(function (p) { return !cfg.temas.length || cfg.temas.indexOf(p.t) >= 0; }), BANCO].forEach(function (fuente) {
+  var ts = tSel(), bp = BP();
+  [pool, bp.filter(function (p) { return !ts.length || ts.indexOf(p.t) >= 0; }), bp].forEach(function (fuente) {
     if (lista.length >= N_BAT) return;
     ponderadas(fuente.filter(function (p) { return !ids[p.id]; }), N_BAT - lista.length).forEach(function (p) { ids[p.id] = 1; lista.push(p); });
   });
   return baraja(lista);
 }
 function eligeSimulacro() {
+  if (cfg.parte === "C") return baraja(ponderadas(BP(), SIMC_N));
   var t = baraja(ponderadas(BANCO.filter(function (p) { return p.k === "T"; }), SIM_T));
   var s = baraja(ponderadas(BANCO.filter(function (p) { return p.k === "P"; }), SIM_P));
   return t.concat(s);
@@ -76,13 +88,13 @@ function eligeSimulacro() {
 /* ---------- ciclo del test ---------- */
 function empieza(modo) {
   var ps, inm = true, dur;
-  if (modo === "simulacro") { ps = eligeSimulacro(); inm = false; dur = Math.round(SIM_MIN * 60 * ps.length / (SIM_T + SIM_P)); }
+  if (modo === "simulacro") { ps = eligeSimulacro(); inm = false; dur = cfg.parte === "C" ? SIMC_MIN * 60 : Math.round(SIM_MIN * 60 * ps.length / (SIM_T + SIM_P)); }
   else if (modo === "falladas") { ps = baraja(falladasPend()).slice(0, N_BAT); dur = ps.length * SEG_PREG; }
   else { ps = eligeBateria(); dur = ps.length * SEG_PREG; }
   if (!ps.length) return;
   var ahora = Date.now();
   cur = {
-    modo: modo, inm: inm, pen: cfg.pen, i: 0, t0: ahora, fin: ahora + dur * 1000, dur: dur,
+    modo: modo, parte: cfg.parte, inm: inm, pen: cfg.pen, i: 0, t0: ahora, fin: ahora + dur * 1000, dur: dur,
     ps: ps.map(function (p) { return { id: p.id, ord: baraja([0, 1, 2, 3]) }; }),
     r: ps.map(function () { return -1; }), tq: ps.map(function () { return 0; })
   };
@@ -114,7 +126,7 @@ function finaliza(agotado) {
     det.push([q.id, orig, Math.round(cur.tq[i] / 100) / 10]);
   });
   var n = cur.ps.length, seg = Math.max(0, Math.min(cur.dur, Math.round(cur.dur - resta() / 1000)));
-  var h = { id: Date.now(), ts: Date.now(), modo: cur.modo, n: n, ok: ok, ko: ko, bl: bl, pen: cur.pen,
+  var h = { id: Date.now(), ts: Date.now(), modo: cur.modo, parte: cur.parte || "E", n: n, ok: ok, ko: ko, bl: bl, pen: cur.pen,
     pts: ok * ACIERTO - ko * cur.pen, max: n * ACIERTO, seg: seg, tpp: ok + ko ? tResp / 1000 / (ok + ko) : 0, agot: !!agotado, det: det };
   hist.push(h); guarda("hist", hist); guarda("q", est); cur = null; borra("cur");
   vista.res = h; vista.filtro = "todas"; ir("res");
@@ -137,24 +149,25 @@ function pinta() {
 
 /* ---------- inicio ---------- */
 function vInicio() {
-  var nT = BANCO.filter(function (p) { return p.k === "T"; }).length, nP = BANCO.length - nT, pend = falladasPend().length;
-  var pool = BANCO.filter(enPool).length, nD = BANCO.filter(function (p) { return p.d === 1; }).length;
-  var nb = Math.min(N_BAT, BANCO.length), h = "";
-  h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>Parte específica · ' + BANCO.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)<br>Versión " + VERSION_APP + "</p></header><div class=\"cont\">";
+  var bp = BP(), nT = bp.filter(function (p) { return p.k === "T"; }).length, nP = bp.length - nT, pend = falladasPend().length;
+  var pool = BANCO.filter(enPool).length, nD = bp.filter(function (p) { return p.d === 1; }).length, ts = tSel(), C = cfg.parte === "C";
+  var nb = Math.min(N_BAT, bp.length), h = "";
+  h += '<header class="cab"><h1>Celador/a del SERGAS</h1><p>' + PARTES[cfg.parte] + " · " + bp.length + " preguntas (" + nT + " de teoría, " + nP + " supuestos; " + nD + " de nivel difícil)<br>Versión " + VERSION_APP + " · " + BANCO.length + " preguntas en total</p></header><div class=\"cont\">";
+  h += '<div class="carta" style="padding:8px"><div class="seg" style="margin:0">' + [["E", "Parte específica"], ["C", "Parte común"]].map(function (o) { return '<button data-a="parte" data-v="' + o[0] + '" class="' + (cfg.parte === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
   if (cur) h += '<div class="carta"><div class="et">Test en curso</div><h2>Tienes un ' + MODOS[cur.modo].toLowerCase() + ' sin terminar</h2><div class="et">' + (enPausa() ? "En pausa: quedan " : "El tiempo sigue corriendo: quedan ") + mmss(resta() / 1000) +
     '</div><div class="fila"><button class="btn" data-a="continuar">Continuar</button><button class="btn sec" data-a="descartar">Descartar</button></div></div>';
   h += '<div class="carta"><div class="et">Entrenador</div><h2>Batería de ' + nb + ' preguntas</h2><div class="et">' + mmss(nb * SEG_PREG) + " min · acierto +0,5 · fallo −" + num(cfg.pen, 3) + " · en blanco 0</div>";
   h += '<div class="seg">' + [["M", "Mixto"], ["T", "Teoría"], ["P", "Supuestos"]].map(function (o) { return '<button data-a="tipo" data-v="' + o[0] + '" class="' + (cfg.tipo === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
   h += '<div class="seg">' + [["T", "Todas"], ["X", "Mezcla"], ["D", "Difíciles"], ["K", "Técnicas"]].map(function (o) { return '<button data-a="nivel" data-v="' + o[0] + '" class="' + (cfg.nivel === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
-  h += '<div class="chips"><button class="chip ' + (cfg.temas.length ? "" : "on") + '" data-a="tema" data-v="0">Todos los temas</button>' + Object.keys(TEMAS).map(function (t) {
-    return '<button class="chip ' + (cfg.temas.indexOf(+t) >= 0 ? "on" : "") + '" data-a="tema" data-v="' + t + '" title="' + esc(TEMAS[t]) + '">T' + t + "</button>"; }).join("") + "</div>";
-  if (pool < N_BAT) h += '<div class="aviso info" style="margin-top:10px"><strong>Solo hay ' + pool + ' preguntas con estos filtros</strong>La batería se completa hasta ' + nb + ' con otras preguntas' + (cfg.temas.length ? " de los mismos temas." : ".") + "</div>";
-  if (cfg.temas.length) h += '<div class="et" style="margin-top:8px">' + cfg.temas.map(function (t) { return "T" + t + ": " + TEMAS[t]; }).join(" · ") + "</div>";
+  h += '<div class="chips"><button class="chip ' + (ts.length ? "" : "on") + '" data-a="tema" data-v="0">Todos los temas</button>' + Object.keys(TEMAS).filter(function (t) { return parteDe(+t) === cfg.parte; }).map(function (t) {
+    return '<button class="chip ' + (ts.indexOf(+t) >= 0 ? "on" : "") + '" data-a="tema" data-v="' + t + '" title="' + esc(TEMAS[t]) + '">' + etq(t) + "</button>"; }).join("") + "</div>";
+  if (pool < N_BAT) h += '<div class="aviso info" style="margin-top:10px"><strong>Solo hay ' + pool + ' preguntas con estos filtros</strong>La batería se completa hasta ' + nb + ' con otras preguntas' + (ts.length ? " de los mismos temas." : ".") + "</div>";
+  if (ts.length) h += '<div class="et" style="margin-top:8px">' + ts.map(function (t) { return etq(t) + ": " + TEMAS[t]; }).join(" · ") + "</div>";
   h += '<button class="btn" data-a="empieza" data-v="bateria"' + (nb && !cur ? "" : " disabled") + ">Empieza tu práctica</button></div>";
   h += '<div class="carta"><div class="et">Refuerzo</div><h2>Repaso de falladas</h2><div class="et">' + (pend ? pend + " preguntas pendientes de acertar. Batería de " + Math.min(N_BAT, pend) + "." : "No tienes preguntas falladas pendientes.") +
     '</div><button class="btn sec" data-a="empieza" data-v="falladas"' + (pend && !cur ? "" : " disabled") + ">Repasar falladas</button></div>";
-  h += '<div class="carta"><div class="et">Formato de examen</div><h2>Simulacro del primer ejercicio</h2><div class="et">' + SIM_T + " preguntas teóricas + " + SIM_P + " de supuestos prácticos · " + SIM_MIN +
-    ' min · 0 a 50 puntos · corrección al final</div><button class="btn sec" data-a="empieza" data-v="simulacro"' + (cur ? " disabled" : "") + ">Hacer simulacro</button></div>";
+  h += '<div class="carta"><div class="et">Formato de examen</div>' + (C ? "<h2>Simulacro del segundo ejercicio</h2><div class=\"et\">" + SIMC_N + " preguntas de la parte común · " + SIMC_MIN + " min · 0 a 5 puntos · corrección al final</div>" :
+    "<h2>Simulacro del primer ejercicio</h2><div class=\"et\">" + SIM_T + " preguntas teóricas + " + SIM_P + " de supuestos prácticos · " + SIM_MIN + " min · 0 a 50 puntos · corrección al final</div>") + '<button class="btn sec" data-a="empieza" data-v="simulacro"' + (cur ? " disabled" : "") + ">Hacer simulacro</button></div>";
   var s = agrega(periodo(7));
   if (s.n) h += '<div class="carta"><div class="et">Últimos 7 días · ' + s.tests + " test</div>" + tri(s) + '<button class="btn sec" data-a="ir" data-v="act">Ver estadísticas</button></div>';
   $app.innerHTML = h + "</div>";
@@ -169,7 +182,7 @@ function vTest() {
   h += '<div class="prog"><i style="width:' + pct(hechas, n) + '%"></i></div><div class="puntos">' + cur.ps.map(function (x, j) {
     var c = ""; if (cur.r[j] >= 0) c = cur.inm ? (x.ord[cur.r[j]] === 0 ? "ok" : "ko") : "hecha";
     return '<button data-a="salta" data-v="' + j + '" class="' + c + (j === i ? " act" : "") + '" aria-label="Pregunta ' + (j + 1) + '">' + (j + 1) + "</button>"; }).join("") + "</div>";
-  h += '<div class="cont" style="padding-top:10px"><span class="tag">Tema ' + p.t + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.tec ? '<span class="tag">Técnica</span>' : p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
+  h += '<div class="cont" style="padding-top:10px"><span class="tag">' + (p.t > 100 ? "Común · Tema " + (p.t - 100) : "Tema " + p.t) + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.tec ? '<span class="tag">Técnica</span>' : p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
   q.ord.forEach(function (o, j) {
     var c = ""; if (resuelta) { if (o === 0) c = "ok"; else if (j === r) c = "ko"; } else if (j === r) c = "sel";
     h += '<button class="op ' + c + '" data-a="resp" data-v="' + j + '"' + (resuelta ? " disabled" : "") + "><b>" + "ABCD"[j] + "</b><span>" + esc(p.o[o]) + "</span></button>";
@@ -200,13 +213,13 @@ function tri(s) {
 function porTema(lista) {
   var m = {};
   lista.forEach(function (h) { h.det.forEach(function (d) { var t = tema(d[0]), x = m[t] || (m[t] = [0, 0, 0]); x[d[1] < 0 ? 2 : d[1] === 0 ? 0 : 1]++; }); });
-  var ks = Object.keys(m); if (!ks.length) return "";
+  var ks = Object.keys(m).sort(function (a, b) { return a - b; }); if (!ks.length) return "";
   return '<table class="tabla"><tr><th>Tema</th><th>Acert.</th><th>Fall.</th><th>Blanco</th><th>% acierto</th></tr>' + ks.map(function (t) {
-    var x = m[t]; return "<tr><td>T" + t + " " + esc(TEMAS[t] || "") + "</td><td>" + x[0] + "</td><td>" + x[1] + "</td><td>" + x[2] + "</td><td>" + pct(x[0], x[0] + x[1] + x[2]) + " %</td></tr>"; }).join("") + "</table>";
+    var x = m[t]; return "<tr><td>" + etq(t) + " " + esc(TEMAS[t] || "") + "</td><td>" + x[0] + "</td><td>" + x[1] + "</td><td>" + x[2] + "</td><td>" + pct(x[0], x[0] + x[1] + x[2]) + " %</td></tr>"; }).join("") + "</table>";
 }
 function vRes() {
   var r = vista.res; if (!r) return ir("act");
-  var h = '<header class="cab"><h1>' + MODOS[r.modo] + " · " + fecha(r.ts) + "</h1><p>" + r.n + " preguntas" + (r.agot ? " · tiempo agotado" : "") + '</p></header><div class="cont">';
+  var h = '<header class="cab"><h1>' + MODOS[r.modo] + " · " + fecha(r.ts) + "</h1><p>" + PARTES[r.parte || "E"] + " · " + r.n + " preguntas" + (r.agot ? " · tiempo agotado" : "") + '</p></header><div class="cont">';
   h += '<div class="carta"><div class="et">Nota</div><div class="nota">' + num(r.pts) + " <small>/ " + num(r.max, r.max % 1 ? 1 : 0) + " · equivale a " + num(Math.max(0, r.pts) * 10 / r.max) + " sobre 10</small></div>";
   if (r.modo === "simulacro") h += '<div class="aviso ' + (r.pts >= r.max / 2 ? "ok" : "ko") + '" style="margin-top:12px"><strong>' + (r.pts >= r.max / 2 ? "Alcanza" : "No alcanza") + " el 50 % de la puntuación</strong>Referencia habitual para superar el ejercicio; confírmala en las bases de la convocatoria.</div>";
   h += tri(r) + '<h3>Tiempo</h3><div class="et">Total: ' + mmss(r.seg) + " min · Media por pregunta respondida: " + num(r.tpp, 1) + " s · Penalización aplicada: −" + num(r.pen, 3) + "</div></div>";
@@ -216,7 +229,7 @@ function vRes() {
   r.det.forEach(function (d, i) {
     var p = PORID[d[0]]; if (!p) return;
     var st = d[1] < 0 ? "bl" : d[1] === 0 ? "ok" : "ko"; if (vista.filtro !== "todas" && vista.filtro !== st) return; k++;
-    h += '<div class="rev"><span class="tag">' + (i + 1) + '</span><span class="tag">T' + p.t + '</span><span class="tag">' + (st === "ok" ? "Acertada" : st === "ko" ? "Fallada" : "En blanco") + '</span><span class="tag">' + num(d[2], 1) + " s</span><p><strong>" + esc(p.q) + "</strong></p>" +
+    h += '<div class="rev"><span class="tag">' + (i + 1) + '</span><span class="tag">' + etq(p.t) + '</span><span class="tag">' + (st === "ok" ? "Acertada" : st === "ko" ? "Fallada" : "En blanco") + '</span><span class="tag">' + num(d[2], 1) + " s</span><p><strong>" + esc(p.q) + "</strong></p>" +
       (st === "ko" ? '<div class="r" style="color:var(--ko)">Tu respuesta: ' + esc(p.o[d[1]]) + "</div>" : "") + '<div class="r" style="color:var(--ok)">Correcta: ' + esc(p.o[0]) + '</div><div class="r et">' + esc(p.e) + "</div></div>";
   });
   if (!k) h += '<div class="et" style="padding:12px 0">Ninguna pregunta en este filtro.</div>';
@@ -225,7 +238,9 @@ function vRes() {
 }
 
 /* ---------- estadísticas ---------- */
+function hp() { return vista.parte === "T" ? hist : hist.filter(function (h) { return (h.parte || "E") === vista.parte; }); }
 function periodo(dias, desfase) {
+  var hist = hp();
   if (!dias) return hist.slice();
   var fin = Date.now() - (desfase || 0) * dias * 864e5, ini = fin - dias * 864e5;
   return hist.filter(function (h) { return h.ts > ini && h.ts <= fin; });
@@ -249,19 +264,21 @@ function grafico(l) {
   return s + '</svg><div class="ley">' + series.map(function (se) { return '<span><i style="background:' + se[0] + '"></i>' + se[2] + "</span>"; }).join("") + "</div>";
 }
 function tendencia() {
-  var l = hist.slice(-10); if (l.length < 4) return '<div class="aviso info"><strong>Evolución</strong>Haz al menos 4 test para ver si mejoras o empeoras.</div>';
+  var l = hp().slice(-10); if (l.length < 4) return '<div class="aviso info"><strong>Evolución</strong>Haz al menos 4 test para ver si mejoras o empeoras.</div>';
   var mit = Math.floor(l.length / 2), med = function (a) { return a.reduce(function (s, h) { return s + nota10(h); }, 0) / a.length; };
   var a = med(l.slice(0, l.length - mit)), b = med(l.slice(-mit)), d = b - a;
   var c = Math.abs(d) < 0.3 ? ["info", "Estable"] : d > 0 ? ["ok", "Mejorando"] : ["ko", "Empeorando"];
   return '<div class="aviso ' + c[0] + '"><strong>' + c[1] + " (" + (d > 0 ? "+" : "") + num(d) + " puntos sobre 10)</strong>Media de los últimos " + mit + " test: " + num(b) + ". Media de los " + (l.length - mit) + " anteriores: " + num(a) + ".</div>";
 }
 function vAct() {
+  var hist = hp();
   var h = '<header class="cab"><h1>Actividad</h1><p>' + hist.length + ' test realizados</p></header><div class="cont"><div class="carta" style="padding:8px"><div class="seg" style="margin:0">' +
-    [["est", "Estadísticas"], ["his", "Historial de test"]].map(function (o) { return '<button data-a="tab" data-v="' + o[0] + '" class="' + (vista.tab === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
+    [["est", "Estadísticas"], ["his", "Historial de test"]].map(function (o) { return '<button data-a="tab" data-v="' + o[0] + '" class="' + (vista.tab === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+    '<div class="seg">' + [["E", "Específica"], ["C", "Común"], ["T", "Todo"]].map(function (o) { return '<button data-a="vparte" data-v="' + o[0] + '" class="' + (vista.parte === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
   if (!hist.length) { $app.innerHTML = h + '<div class="carta"><h2>Aún no hay datos</h2><div class="et">Cuando termines tu primer test aparecerán aquí las estadísticas.</div></div></div>'; return; }
   if (vista.tab === "his") {
     h += '<div class="carta"><table class="tabla"><tr><th>Fecha</th><th>Tipo</th><th>A / F / B</th><th>Nota</th></tr>' + hist.slice().reverse().map(function (x) {
-      return '<tr class="clic" data-a="ver" data-v="' + x.id + '"><td>' + fecha(x.ts) + "</td><td>" + MODOS[x.modo] + "</td><td>" + x.ok + " / " + x.ko + " / " + x.bl + "</td><td><strong>" + num(x.pts) + "</strong> / " + num(x.max, x.max % 1 ? 1 : 0) + "</td></tr>"; }).join("") + '</table><div class="et" style="margin-top:8px">Toca un test para revisarlo.</div></div>';
+      return '<tr class="clic" data-a="ver" data-v="' + x.id + '"><td>' + fecha(x.ts) + "</td><td>" + MODOS[x.modo] + (vista.parte === "T" ? " " + ((x.parte || "E") === "C" ? "común" : "espec.") : "") + "</td><td>" + x.ok + " / " + x.ko + " / " + x.bl + "</td><td><strong>" + num(x.pts) + "</strong> / " + num(x.max, x.max % 1 ? 1 : 0) + "</td></tr>"; }).join("") + '</table><div class="et" style="margin-top:8px">Toca un test para revisarlo.</div></div>';
   } else {
     var l = periodo(vista.per), s = agrega(l);
     h += '<div class="carta"><h2>Así está tu preparación</h2><div class="seg">' + [[7, "7 días"], [30, "30 días"], [0, "Todo"]].map(function (o) { return '<button data-a="per" data-v="' + o[0] + '" class="' + (vista.per === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
@@ -284,9 +301,9 @@ function vAjustes() {
   h += '<div class="carta"><h2>Puntuación</h2><div class="et">Acierto +0,5. En blanco 0. En el examen el fallo resta 1/4 del valor del acierto (0,125).</div><h3>Penalización por fallo</h3><input type="number" id="pen" min="0" max="0.5" step="0.005" value="' + cfg.pen + '"><button class="btn sec" data-a="pen">Guardar penalización</button></div>';
   h += '<div class="carta"><h2>Mensaje de ánimo</h2><div class="et">Nombre que aparece en el mensaje al empezar cada test. Déjalo vacío para un mensaje sin nombre.</div><h3>Nombre</h3><input type="text" id="nombre" maxlength="30" value="' + esc(cfg.nombre) + '" style="font:inherit;padding:9px;border:1.5px solid var(--linea);border-radius:8px;background:var(--carta);color:var(--tinta);width:100%"><button class="btn sec" data-a="nombre">Guardar nombre</button></div>';
   h += '<div class="carta"><h2>Copia de seguridad</h2><div class="et">Exporta el historial para llevarlo a otro dispositivo o guardarlo.</div><button class="btn sec" data-a="exporta">Exportar copia</button><h3>Importar copia</h3><input type="file" id="imp" accept="application/json,.json"><button class="btn rojo" data-a="borra">Borrar todos los datos</button></div>';
-  h += '<div class="carta"><h2>Banco de preguntas</h2><table class="tabla"><tr><th>Tema</th><th>Teoría</th><th>Supuestos</th><th>Difíciles</th></tr>' + Object.keys(TEMAS).map(function (t) {
+  h += '<div class="carta"><h2>Banco de preguntas</h2><div class="et">T1–T10: parte específica · C1–C8: parte común</div><table class="tabla"><tr><th>Tema</th><th>Teoría</th><th>Supuestos</th><th>Difíciles</th></tr>' + Object.keys(TEMAS).map(function (t) {
     var a = BANCO.filter(function (p) { return p.t === +t; }), s = a.filter(function (p) { return p.k === "P"; }).length;
-    return "<tr><td>T" + t + " " + esc(TEMAS[t]) + "</td><td>" + (a.length - s) + "</td><td>" + s + "</td><td>" + a.filter(function (p) { return p.d === 1; }).length + "</td></tr>"; }).join("") + "</table></div>";
+    return "<tr><td>" + etq(t) + " " + esc(TEMAS[t]) + "</td><td>" + (a.length - s) + "</td><td>" + s + "</td><td>" + a.filter(function (p) { return p.d === 1; }).length + "</td></tr>"; }).join("") + "</table></div>";
   h += '<div class="carta"><h2>Instalar la app</h2><div class="et">iPhone / iPad (Safari): Compartir → Añadir a pantalla de inicio.<br>Android (Chrome): menú ⋮ → Instalar aplicación.<br>Windows 11 (Edge o Chrome): icono de instalar en la barra de direcciones, o menú → Aplicaciones → Instalar este sitio como aplicación.</div></div>';
   $app.innerHTML = h + "</div>";
   document.getElementById("imp").onchange = function (ev) {
@@ -319,6 +336,8 @@ function avisa(txt) { accionModal = null; $modal.innerHTML = '<div class="modal"
 var AC = {
   ir: function (v) { ir(v); },
   tipo: function (v) { cfg.tipo = v; guarda("cfg", cfg); pinta(); },
+  parte: function (v) { cfg.parte = v === "C" ? "C" : "E"; vista.parte = cfg.parte; guarda("cfg", cfg); pinta(); },
+  vparte: function (v) { vista.parte = v; pinta(); },
   nivel: function (v) { cfg.nivel = v; guarda("cfg", cfg); pinta(); },
   tema: function (v) { v = +v; if (!v) cfg.temas = []; else { var k = cfg.temas.indexOf(v); if (k >= 0) cfg.temas.splice(k, 1); else cfg.temas.push(v); cfg.temas.sort(function (a, b) { return a - b; }); } guarda("cfg", cfg); pinta(); },
   empieza: function (v) { if (!cur) animo(function () { empieza(v); }); },

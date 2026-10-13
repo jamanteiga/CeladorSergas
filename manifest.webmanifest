@@ -1,7 +1,7 @@
 {
   "name": "Test Celador SERGAS",
   "short_name": "Celador",
-  "description": "Baterías de test para la parte específica de la oposición de celador/a del SERGAS",
+  "description": "Baterías de test de la parte específica y común de la oposición de celador/a del SERGAS",
   "lang": "es",
   "start_url": "./",
   "scope": "./",
