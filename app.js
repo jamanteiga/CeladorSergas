@@ -2,7 +2,7 @@
 (function () {
 "use strict";
 
-var VERSION_APP = 11;
+var VERSION_APP = 12;
 var ACIERTO = 0.5, SEG_PREG = 30, N_BAT = 50, SIM_T = 50, SIM_P = 50, SIM_MIN = 150, SIMC_N = 10, SIMC_MIN = 15;
 var TEMAS = {
   1: "Funciones, vigilancia y accesos", 2: "Utensilios y mobiliario", 3: "Movilización y traslados",
