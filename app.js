@@ -2,7 +2,7 @@
 (function () {
 "use strict";
 
-var VERSION_APP = 12;
+var VERSION_APP = 13;
 var ACIERTO = 0.5, SEG_PREG = 30, N_BAT = 50, SIM_T = 50, SIM_P = 50, SIM_MIN = 150, SIMC_N = 10, SIMC_MIN = 15;
 var TEMAS = {
   1: "Funciones, vigilancia y accesos", 2: "Utensilios y mobiliario", 3: "Movilización y traslados",
@@ -14,10 +14,15 @@ var TEMAS = {
   105: "Estatuto Marco (Ley 55/2003)", 106: "Selección y provisión (Decreto 206/2005)",
   107: "Protección de datos, consentimiento e historia clínica", 108: "PRL, igualdad y violencia de género"
 };
-var PARTES = { E: "Parte específica", C: "Parte común" };
+var PARTES = { E: "Parte específica", C: "Parte común", X: "Examen completo (común + específica)" };
 function parteDe(t) { return t > 100 ? "C" : "E"; }
 function etq(t) { t = +t; return t > 100 ? "C" + (t - 100) : "T" + t; }
-var MODOS = { bateria: "Batería", falladas: "Repaso", simulacro: "Simulacro" };
+var MODOS = { bateria: "Batería", falladas: "Repaso", simulacro: "Simulacro", oficial: "Simulacro oficial 2025" };
+/* Simulacro oficial 2025. Modelo "B" = bases SERGAS 2025: 1.er ejercicio 50 teoría + 50 supuestos (+5 +5 de reserva) en 150 min,
+   acierto 0,5 y fallo -1/4 del acierto; 2.º ejercicio (opcional) 10 de parte común (+2 de reserva) en 15 min.
+   Modelo "M" = formato mixto de 100: 10 común + 90 específica (+10 de reserva), acierto 1 y fallo -0,25. */
+var BLOQUES = { T: "Teoría", RT: "Reserva teoría", P: "Supuestos", RP: "Reserva supuestos", C: "Parte común", RC: "Reserva común", E: "Parte específica", RE: "Reserva" };
+function esRes(b) { return b && b.charAt(0) === "R"; }
 var BANCO = window.BANCO || [], PORID = {};
 BANCO.forEach(function (p) { PORID[p.id] = p; });
 
@@ -27,6 +32,7 @@ function guarda(k, v) { try { localStorage.setItem("celador." + k, JSON.stringif
 function borra(k) { try { localStorage.removeItem("celador." + k); } catch (e) {} }
 
 var cfg = lee("cfg", {}); if (typeof cfg.pen !== "number") cfg.pen = 0.125; if (!cfg.tipo) cfg.tipo = "M"; if (!Array.isArray(cfg.temas)) cfg.temas = []; if (!cfg.nivel) cfg.nivel = "X"; if (typeof cfg.nombre !== "string") cfg.nombre = "Belén"; if (cfg.parte !== "C") cfg.parte = "E";
+if (!cfg.of) cfg.of = {}; if (cfg.of.mod !== "M") cfg.of.mod = "B"; if (typeof cfg.of.com !== "boolean") cfg.of.com = true; if (typeof cfg.of.res !== "boolean") cfg.of.res = true; if (typeof cfg.of.min !== "number") cfg.of.min = 0;
 var hist = lee("hist", []), est = lee("q", {}), cur = lee("cur", null);
 var vista = { v: "inicio", tab: "est", per: 7, graf: "pct", res: null, filtro: "todas", parte: cfg.parte }, tic = null, visto = 0;
 
@@ -80,15 +86,49 @@ function eligeBateria() {
 }
 function eligeSimulacro() {
   if (cfg.parte === "C") return baraja(ponderadas(BP(), SIMC_N));
-  var t = baraja(ponderadas(BANCO.filter(function (p) { return p.k === "T"; }), SIM_T));
-  var s = baraja(ponderadas(BANCO.filter(function (p) { return p.k === "P"; }), SIM_P));
+  var t = baraja(ponderadas(BANCO.filter(function (p) { return p.t <= 10 && p.k === "T"; }), SIM_T));
+  var s = baraja(ponderadas(BANCO.filter(function (p) { return p.t <= 10 && p.k === "P"; }), SIM_P));
   return t.concat(s);
+}
+
+/* ---------- simulacro oficial 2025 ---------- */
+function ofMinDef() { return cfg.of.mod === "M" ? SIM_MIN : SIM_MIN + (cfg.of.com ? SIMC_MIN : 0); }
+function ofMin() { return cfg.of.min > 0 ? cfg.of.min : ofMinDef(); }
+function ofVal() { return cfg.of.mod === "M" ? 1 : ACIERTO; }
+function ofDesc() {
+  if (cfg.of.mod === "M") return "10 de parte común + 90 de parte específica" + (cfg.of.res ? " + 10 de reserva" : "") + " · acierto +1 · fallo −0,25 · " + ofMin() + " min";
+  return "1.er ejercicio: 50 de teoría + 50 de supuestos" + (cfg.of.res ? " (+5 y +5 de reserva)" : "") + (cfg.of.com ? " · 2.º ejercicio: 10 de parte común" + (cfg.of.res ? " (+2 de reserva)" : "") : "") + " · acierto +0,5 · fallo −0,125 · " + ofMin() + " min";
+}
+function tomaDificiles(pool, n, usados) { // nivel medio-alto: unas 6 de cada 10, difíciles o técnicas
+  var libres = pool.filter(function (p) { return !usados[p.id]; });
+  var dif = ponderadas(libres.filter(function (p) { return p.d === 1 || p.tec === 1; }), Math.round(n * 0.6));
+  dif.forEach(function (p) { usados[p.id] = 1; });
+  var resto = ponderadas(libres.filter(function (p) { return !usados[p.id]; }), n - dif.length);
+  resto.forEach(function (p) { usados[p.id] = 1; });
+  return baraja(dif.concat(resto));
+}
+function eligeOficial() { // devuelve [{p, b}] en el orden del cuadernillo
+  var u = {}, out = [], res = cfg.of.res;
+  var espT = BANCO.filter(function (p) { return p.t <= 10 && p.k === "T"; }), espP = BANCO.filter(function (p) { return p.t <= 10 && p.k === "P"; });
+  var com = BANCO.filter(function (p) { return p.t > 100; });
+  function mete(lista, b) { lista.forEach(function (p) { out.push({ p: p, b: b }); }); }
+  if (cfg.of.mod === "M") {
+    mete(tomaDificiles(com, 10, u), "C");
+    mete(baraja(tomaDificiles(espT, 45, u).concat(tomaDificiles(espP, 45, u))), "E");
+    if (res) mete(tomaDificiles(espT.concat(espP), 10, u), "RE");
+  } else {
+    mete(tomaDificiles(espT, SIM_T, u), "T"); if (res) mete(tomaDificiles(espT, 5, u), "RT");
+    mete(tomaDificiles(espP, SIM_P, u), "P"); if (res) mete(tomaDificiles(espP, 5, u), "RP");
+    if (cfg.of.com) { mete(tomaDificiles(com, SIMC_N, u), "C"); if (res) mete(tomaDificiles(com, 2, u), "RC"); }
+  }
+  return out;
 }
 
 /* ---------- ciclo del test ---------- */
 function empieza(modo) {
-  var ps, inm = true, dur;
-  if (modo === "simulacro") { ps = eligeSimulacro(); inm = false; dur = cfg.parte === "C" ? SIMC_MIN * 60 : Math.round(SIM_MIN * 60 * ps.length / (SIM_T + SIM_P)); }
+  var ps, inm = true, dur, bl = null;
+  if (modo === "oficial") { var sel = eligeOficial(); ps = sel.map(function (x) { return x.p; }); bl = sel.map(function (x) { return x.b; }); inm = false; dur = ofMin() * 60; }
+  else if (modo === "simulacro") { ps = eligeSimulacro(); inm = false; dur = cfg.parte === "C" ? SIMC_MIN * 60 : Math.round(SIM_MIN * 60 * ps.length / (SIM_T + SIM_P)); }
   else if (modo === "falladas") { ps = baraja(falladasPend()).slice(0, N_BAT); dur = ps.length * SEG_PREG; }
   else { ps = eligeBateria(); dur = ps.length * SEG_PREG; }
   if (!ps.length) return;
@@ -96,8 +136,9 @@ function empieza(modo) {
   cur = {
     modo: modo, parte: cfg.parte, inm: inm, pen: cfg.pen, i: 0, t0: ahora, fin: ahora + dur * 1000, dur: dur,
     ps: ps.map(function (p) { return { id: p.id, ord: baraja([0, 1, 2, 3]) }; }),
-    r: ps.map(function () { return -1; }), tq: ps.map(function () { return 0; })
+    r: ps.map(function () { return -1; }), tq: ps.map(function () { return 0; }), f: ps.map(function () { return 0; })
   };
+  if (bl) { cur.b = bl; cur.val = ofVal(); cur.pen = cur.val / 4; cur.mod = cfg.of.mod; cur.parte = bl.indexOf("C") >= 0 ? "X" : "E"; }
   guarda("cur", cur); visto = ahora; ir("test");
 }
 function enPausa() { return cur && cur.rest != null; }
@@ -123,11 +164,19 @@ function finaliza(agotado) {
   cur.ps.forEach(function (q, i) {
     var r = cur.r[i], orig = r < 0 ? -1 : q.ord[r], e = est[q.id] || (est[q.id] = { ok: 0, ko: 0, u: -1 });
     if (orig < 0) bl++; else { tResp += cur.tq[i]; if (orig === 0) { ok++; e.ok++; e.u = 1; } else { ko++; e.ko++; e.u = 0; } }
-    det.push([q.id, orig, Math.round(cur.tq[i] / 100) / 10]);
+    det.push(cur.b ? [q.id, orig, Math.round(cur.tq[i] / 100) / 10, cur.f && cur.f[i] ? 1 : 0, cur.b[i]] : [q.id, orig, Math.round(cur.tq[i] / 100) / 10, cur.f && cur.f[i] ? 1 : 0]);
   });
   var n = cur.ps.length, seg = Math.max(0, Math.min(cur.dur, Math.round(cur.dur - resta() / 1000)));
   var h = { id: Date.now(), ts: Date.now(), modo: cur.modo, parte: cur.parte || "E", n: n, ok: ok, ko: ko, bl: bl, pen: cur.pen,
     pts: ok * ACIERTO - ko * cur.pen, max: n * ACIERTO, seg: seg, tpp: ok + ko ? tResp / 1000 / (ok + ko) : 0, agot: !!agotado, det: det };
+  if (cur.b) { // simulacro oficial: puntúan solo las preguntas que no son de reserva, desglosadas por bloque
+    var val = cur.val, blq = {};
+    det.forEach(function (d) { var x = blq[d[4]] || (blq[d[4]] = { n: 0, ok: 0, ko: 0, bl: 0 }); x.n++; if (d[1] < 0) x.bl++; else if (d[1] === 0) x.ok++; else x.ko++; });
+    Object.keys(blq).forEach(function (k) { var x = blq[k]; x.pts = x.ok * val - x.ko * cur.pen; x.max = x.n * val; });
+    var t = { n: 0, ok: 0, ko: 0, bl: 0 }; Object.keys(blq).forEach(function (k) { if (esRes(k)) return; ["n", "ok", "ko", "bl"].forEach(function (c) { t[c] += blq[k][c]; }); });
+    h.n = t.n; h.ok = t.ok; h.ko = t.ko; h.bl = t.bl; h.pts = t.ok * val - t.ko * cur.pen; h.max = t.n * val; h.val = val; h.mod = cur.mod; h.blq = blq;
+    var tr = 0, nr = 0; det.forEach(function (d) { if (!esRes(d[4]) && d[1] >= 0) { tr += d[2]; nr++; } }); h.tpp = nr ? tr / nr : 0;
+  }
   hist.push(h); guarda("hist", hist); guarda("q", est); cur = null; borra("cur");
   vista.res = h; vista.filtro = "todas"; ir("res");
 }
@@ -168,6 +217,12 @@ function vInicio() {
     '</div><button class="btn sec" data-a="empieza" data-v="falladas"' + (pend && !cur ? "" : " disabled") + ">Repasar falladas</button></div>";
   h += '<div class="carta"><div class="et">Formato de examen</div>' + (C ? "<h2>Simulacro del segundo ejercicio</h2><div class=\"et\">" + SIMC_N + " preguntas de la parte común · " + SIMC_MIN + " min · 0 a 5 puntos · corrección al final</div>" :
     "<h2>Simulacro del primer ejercicio</h2><div class=\"et\">" + SIM_T + " preguntas teóricas + " + SIM_P + " de supuestos prácticos · " + SIM_MIN + " min · 0 a 50 puntos · corrección al final</div>") + '<button class="btn sec" data-a="empieza" data-v="simulacro"' + (cur ? " disabled" : "") + ">Hacer simulacro</button></div>";
+  h += '<div class="carta"><div class="et">Simulacro oficial 2025</div><h2>Examen completo con reloj</h2><div class="et">' + ofDesc() + "</div>";
+  h += '<div class="seg">' + [["B", "Bases SERGAS 2025"], ["M", "Mixto 10 + 90"]].map(function (o) { return '<button data-a="ofmod" data-v="' + o[0] + '" class="' + (cfg.of.mod === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
+  h += '<div class="chips">' + (cfg.of.mod === "B" ? '<button class="chip ' + (cfg.of.com ? "on" : "") + '" data-a="ofcom">Incluir 2.º ejercicio (parte común)</button>' : "") + '<button class="chip ' + (cfg.of.res ? "on" : "") + '" data-a="ofres">Preguntas de reserva</button></div>';
+  h += '<h3>Tiempo (minutos)</h3><div class="fila"><input type="number" id="ofmin" min="10" max="300" step="5" value="' + ofMin() + '"><button class="btn sec" style="margin-top:0" data-a="ofmin">Fijar</button><button class="btn sec" style="margin-top:0" data-a="ofmin" data-v="0">Oficial</button></div>';
+  h += '<div class="et" style="margin-top:8px">Sin pausa · se entrega solo al acabar el tiempo · marca las dudosas para revisarlas · las de reserva no puntúan.</div>';
+  h += '<button class="btn" data-a="empieza" data-v="oficial"' + (cur ? " disabled" : "") + ">Empezar simulacro oficial</button></div>";
   var s = agrega(periodo(7));
   if (s.n) h += '<div class="carta"><div class="et">Últimos 7 días · ' + s.tests + " test</div>" + tri(s) + '<button class="btn sec" data-a="ir" data-v="act">Ver estadísticas</button></div>';
   $app.innerHTML = h + "</div>";
@@ -177,12 +232,14 @@ function vInicio() {
 function vTest() {
   var n = cur.ps.length, i = cur.i, q = cur.ps[i], p = PORID[q.id], r = cur.r[i], resuelta = cur.inm && r >= 0;
   var hechas = cur.r.filter(function (x) { return x >= 0; }).length, h = "";
-  h += '<div class="barra-t"><button data-a="salir">Finalizar</button><span>' + (i + 1) + " / " + n + '</span><button data-a="pausa" class="bpausa' + (enPausa() ? " on" : "") + '" style="margin-left:auto" aria-pressed="' + (enPausa() ? "true" : "false") + '">' + (enPausa() ? "▶ Reanudar" : "⏸ Parar") + '</button><span class="reloj" id="reloj" style="margin-left:0"></span></div>';
+  h += '<div class="barra-t"><button data-a="salir">Finalizar</button><span>' + (i + 1) + " / " + n + "</span>" + (cur.b ? '<span class="reloj" id="reloj"></span></div>' : '<button data-a="pausa" class="bpausa' + (enPausa() ? " on" : "") + '" style="margin-left:auto" aria-pressed="' + (enPausa() ? "true" : "false") + '">' + (enPausa() ? "▶ Reanudar" : "⏸ Parar") + '</button><span class="reloj" id="reloj" style="margin-left:0"></span></div>');
   if (enPausa()) h += '<div class="aviso info" style="margin:10px 16px 0" role="status"><strong>Tiempo en pausa</strong>Se reanuda solo al contestar, al cambiar de pregunta o al pulsar Reanudar.</div>';
   h += '<div class="prog"><i style="width:' + pct(hechas, n) + '%"></i></div><div class="puntos">' + cur.ps.map(function (x, j) {
     var c = ""; if (cur.r[j] >= 0) c = cur.inm ? (x.ord[cur.r[j]] === 0 ? "ok" : "ko") : "hecha";
-    return '<button data-a="salta" data-v="' + j + '" class="' + c + (j === i ? " act" : "") + '" aria-label="Pregunta ' + (j + 1) + '">' + (j + 1) + "</button>"; }).join("") + "</div>";
-  h += '<div class="cont" style="padding-top:10px"><span class="tag">' + (p.t > 100 ? "Común · Tema " + (p.t - 100) : "Tema " + p.t) + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.tec ? '<span class="tag">Técnica</span>' : p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
+    if (cur.f && cur.f[j]) c += " dud"; if (cur.b && esRes(cur.b[j])) c += " res";
+    return '<button data-a="salta" data-v="' + j + '" class="' + c + (j === i ? " act" : "") + '" aria-label="Pregunta ' + (j + 1) + (cur.f && cur.f[j] ? ", dudosa" : "") + '">' + (j + 1) + "</button>"; }).join("") + "</div>";
+  var nd = cur.f ? cur.f.filter(function (x) { return x; }).length : 0;
+  h += '<div class="cont" style="padding-top:10px">' + (cur.b && cur.b[i] !== "T" && cur.b[i] !== "P" ? '<span class="tag">' + BLOQUES[cur.b[i]] + (esRes(cur.b[i]) ? " · no puntúa" : "") + "</span>" : "") + '<span class="tag">' + (p.t > 100 ? "Común · Tema " + (p.t - 100) : "Tema " + p.t) + '</span><span class="tag">' + (p.k === "P" ? "Supuesto práctico" : "Teoría") + "</span>" + (p.tec ? '<span class="tag">Técnica</span>' : p.d ? '<span class="tag">Difícil</span>' : "") + '<p class="preg">' + esc(p.q) + "</p>";
   q.ord.forEach(function (o, j) {
     var c = ""; if (resuelta) { if (o === 0) c = "ok"; else if (j === r) c = "ko"; } else if (j === r) c = "sel";
     h += '<button class="op ' + c + '" data-a="resp" data-v="' + j + '"' + (resuelta ? " disabled" : "") + "><b>" + "ABCD"[j] + "</b><span>" + esc(p.o[o]) + "</span></button>";
@@ -196,6 +253,7 @@ function vTest() {
   if (cur.inm) { ant = blanco(i, -1); sig = blanco(i, 1); } else { ant = i > 0 ? i - 1 : -1; sig = i < n - 1 ? i + 1 : -1; }
   h += '<div class="fila"><button class="btn sec" data-a="salta" data-v="' + ant + '"' + (ant < 0 ? " disabled" : "") + '>Anterior</button><button class="btn sec" data-a="salta" data-v="' + sig + '"' + (sig < 0 ? " disabled" : "") + ">Siguiente</button></div>";
   if (cur.inm) h += '<div class="et" style="margin-top:8px;text-align:center">Anterior y Siguiente saltan a la pregunta en blanco más próxima.</div>';
+  if (!cur.inm) h += '<div class="fila"><button class="btn sec' + (cur.f && cur.f[i] ? " dudon" : "") + '" data-a="dud" aria-pressed="' + (cur.f && cur.f[i] ? "true" : "false") + '">' + (cur.f && cur.f[i] ? "★ Dudosa (quitar)" : "☆ Marcar dudosa") + '</button><button class="btn sec" data-a="sigdud"' + (nd ? "" : " disabled") + ">Ir a dudosas (" + nd + ")</button></div>";
   if (hechas === n || (!cur.inm && i === n - 1)) h += '<button class="btn verde" data-a="' + (hechas === n ? "fin" : "salir") + '">Terminar y ver resultado</button>';
   $app.innerHTML = h + "</div>";
   var $r = document.getElementById("reloj");
@@ -212,24 +270,41 @@ function tri(s) {
 }
 function porTema(lista) {
   var m = {};
-  lista.forEach(function (h) { h.det.forEach(function (d) { var t = tema(d[0]), x = m[t] || (m[t] = [0, 0, 0]); x[d[1] < 0 ? 2 : d[1] === 0 ? 0 : 1]++; }); });
+  lista.forEach(function (h) { h.det.forEach(function (d) { if (esRes(d[4])) return; var t = tema(d[0]), x = m[t] || (m[t] = [0, 0, 0]); x[d[1] < 0 ? 2 : d[1] === 0 ? 0 : 1]++; }); });
   var ks = Object.keys(m).sort(function (a, b) { return a - b; }); if (!ks.length) return "";
   return '<table class="tabla"><tr><th>Tema</th><th>Acert.</th><th>Fall.</th><th>Blanco</th><th>% acierto</th></tr>' + ks.map(function (t) {
     var x = m[t]; return "<tr><td>" + etq(t) + " " + esc(TEMAS[t] || "") + "</td><td>" + x[0] + "</td><td>" + x[1] + "</td><td>" + x[2] + "</td><td>" + pct(x[0], x[0] + x[1] + x[2]) + " %</td></tr>"; }).join("") + "</table>";
 }
+function desglose(r) { // tabla de bloques y notas por ejercicio del simulacro oficial
+  var B = r.blq, h = '<h3>Desglose</h3><table class="tabla"><tr><th>Bloque</th><th>Acert.</th><th>Fall.</th><th>Blanco</th><th>Puntos</th></tr>';
+  ["T", "P", "E", "C", "RT", "RP", "RE", "RC"].forEach(function (k) { var x = B[k]; if (!x) return;
+    h += "<tr><td>" + BLOQUES[k] + (esRes(k) ? " <small>(no puntúa)</small>" : "") + "</td><td>" + x.ok + "</td><td>" + x.ko + "</td><td>" + x.bl + "</td><td>" + (esRes(k) ? "—" : "<strong>" + num(x.pts) + "</strong> / " + num(x.max, x.max % 1 ? 1 : 0)) + "</td></tr>"; });
+  h += "</table>";
+  function nota(t, x, min) { return '<div class="aviso ' + (min === undefined ? "info" : x.pts >= min ? "ok" : "ko") + '" style="margin-top:10px"><strong>' + t + ": " + num(x.pts) + " / " + num(x.max, x.max % 1 ? 1 : 0) + "</strong>" + (min === undefined ? "" : (x.pts >= min ? "Supera" : "No supera") + " el mínimo de " + num(min, 0) + " puntos (50 %).") + "</div>"; }
+  function suma(ks) { var o = { pts: 0, max: 0 }; ks.forEach(function (k) { if (B[k]) { o.pts += B[k].pts; o.max += B[k].max; } }); return o; }
+  if (r.mod === "M") { h += nota("Parte común", suma(["C"])) + nota("Parte específica", suma(["E"])); }
+  else {
+    var e1 = suma(["T", "P"]); h += nota("1.er ejercicio (eliminatorio)", e1, e1.max / 2);
+    if (B.C) { var e2 = suma(["C"]); h += nota("2.º ejercicio (parte común, no eliminatorio)", e2) + '<div class="et">Fase de oposición sin el ejercicio de gallego: ' + num(e1.pts + e2.pts) + " / " + num(e1.max + e2.max, 0) + " puntos.</div>"; }
+  }
+  var nr = 0, okr = 0; ["RT", "RP", "RC", "RE"].forEach(function (k) { if (B[k]) { nr += B[k].n; okr += B[k].ok; } });
+  if (nr) h += '<div class="et" style="margin-top:6px">Reserva: ' + okr + " de " + nr + " acertadas. En el examen real solo cuentan si se anula alguna pregunta.</div>";
+  return h;
+}
 function vRes() {
   var r = vista.res; if (!r) return ir("act");
   var h = '<header class="cab"><h1>' + MODOS[r.modo] + " · " + fecha(r.ts) + "</h1><p>" + PARTES[r.parte || "E"] + " · " + r.n + " preguntas" + (r.agot ? " · tiempo agotado" : "") + '</p></header><div class="cont">';
-  h += '<div class="carta"><div class="et">Nota</div><div class="nota">' + num(r.pts) + " <small>/ " + num(r.max, r.max % 1 ? 1 : 0) + " · equivale a " + num(Math.max(0, r.pts) * 10 / r.max) + " sobre 10</small></div>";
+  h += '<div class="carta"><div class="et">Nota</div><div class="nota">' + num(r.pts) + " <small>/ " + num(r.max, r.max % 1 ? 1 : 0) + " · equivale a " + num(Math.max(0, r.pts) * 10 / r.max) + " sobre 10</small></div>" + (r.modo === "oficial" ? '<div class="et">Nota final neta: aciertos × ' + num(r.val, r.val % 1 ? 1 : 0) + " − fallos × " + num(r.pen, 3) + " (las de reserva no cuentan)</div>" : "");
+  if (r.modo === "oficial" && r.blq) h += desglose(r);
   if (r.modo === "simulacro") h += '<div class="aviso ' + (r.pts >= r.max / 2 ? "ok" : "ko") + '" style="margin-top:12px"><strong>' + (r.pts >= r.max / 2 ? "Alcanza" : "No alcanza") + " el 50 % de la puntuación</strong>Referencia habitual para superar el ejercicio; confírmala en las bases de la convocatoria.</div>";
   h += tri(r) + '<h3>Tiempo</h3><div class="et">Total: ' + mmss(r.seg) + " min · Media por pregunta respondida: " + num(r.tpp, 1) + " s · Penalización aplicada: −" + num(r.pen, 3) + "</div></div>";
   h += '<div class="carta"><h2>Por temas</h2>' + porTema([r]) + "</div>";
-  h += '<div class="carta"><h2>Revisión</h2><div class="seg">' + [["todas", "Todas"], ["ko", "Falladas"], ["bl", "En blanco"]].map(function (o) { return '<button data-a="filtro" data-v="' + o[0] + '" class="' + (vista.filtro === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
+  h += '<div class="carta"><h2>Revisión</h2><div class="seg">' + [["todas", "Todas"], ["ko", "Falladas"], ["bl", "En blanco"]].concat(r.det.some(function (d) { return d[3]; }) ? [["dud", "Dudosas"]] : []).map(function (o) { return '<button data-a="filtro" data-v="' + o[0] + '" class="' + (vista.filtro === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
   var k = 0;
   r.det.forEach(function (d, i) {
     var p = PORID[d[0]]; if (!p) return;
-    var st = d[1] < 0 ? "bl" : d[1] === 0 ? "ok" : "ko"; if (vista.filtro !== "todas" && vista.filtro !== st) return; k++;
-    h += '<div class="rev"><span class="tag">' + (i + 1) + '</span><span class="tag">' + etq(p.t) + '</span><span class="tag">' + (st === "ok" ? "Acertada" : st === "ko" ? "Fallada" : "En blanco") + '</span><span class="tag">' + num(d[2], 1) + " s</span><p><strong>" + esc(p.q) + "</strong></p>" +
+    var st = d[1] < 0 ? "bl" : d[1] === 0 ? "ok" : "ko"; if (vista.filtro === "dud" ? !d[3] : vista.filtro !== "todas" && vista.filtro !== st) return; k++;
+    h += '<div class="rev"><span class="tag">' + (i + 1) + '</span><span class="tag">' + etq(p.t) + "</span>" + (d[4] ? '<span class="tag">' + BLOQUES[d[4]] + "</span>" : "") + (d[3] ? '<span class="tag">★ Dudosa</span>' : "") + '<span class="tag">' + (st === "ok" ? "Acertada" : st === "ko" ? "Fallada" : "En blanco") + '</span><span class="tag">' + num(d[2], 1) + " s</span><p><strong>" + esc(p.q) + "</strong></p>" +
       (st === "ko" ? '<div class="r" style="color:var(--ko)">Tu respuesta: ' + esc(p.o[d[1]]) + "</div>" : "") + '<div class="r" style="color:var(--ok)">Correcta: ' + esc(p.o[0]) + '</div><div class="r et">' + esc(p.e) + "</div></div>";
   });
   if (!k) h += '<div class="et" style="padding:12px 0">Ninguna pregunta en este filtro.</div>';
@@ -278,7 +353,7 @@ function vAct() {
   if (!hist.length) { $app.innerHTML = h + '<div class="carta"><h2>Aún no hay datos</h2><div class="et">Cuando termines tu primer test aparecerán aquí las estadísticas.</div></div></div>'; return; }
   if (vista.tab === "his") {
     h += '<div class="carta"><table class="tabla"><tr><th>Fecha</th><th>Tipo</th><th>A / F / B</th><th>Nota</th></tr>' + hist.slice().reverse().map(function (x) {
-      return '<tr class="clic" data-a="ver" data-v="' + x.id + '"><td>' + fecha(x.ts) + "</td><td>" + MODOS[x.modo] + (vista.parte === "T" ? " " + ((x.parte || "E") === "C" ? "común" : "espec.") : "") + "</td><td>" + x.ok + " / " + x.ko + " / " + x.bl + "</td><td><strong>" + num(x.pts) + "</strong> / " + num(x.max, x.max % 1 ? 1 : 0) + "</td></tr>"; }).join("") + '</table><div class="et" style="margin-top:8px">Toca un test para revisarlo.</div></div>';
+      return '<tr class="clic" data-a="ver" data-v="' + x.id + '"><td>' + fecha(x.ts) + "</td><td>" + MODOS[x.modo] + (vista.parte === "T" && x.modo !== "oficial" ? " " + ((x.parte || "E") === "C" ? "común" : "espec.") : "") + "</td><td>" + x.ok + " / " + x.ko + " / " + x.bl + "</td><td><strong>" + num(x.pts) + "</strong> / " + num(x.max, x.max % 1 ? 1 : 0) + "</td></tr>"; }).join("") + '</table><div class="et" style="margin-top:8px">Toca un test para revisarlo.</div></div>';
   } else {
     var l = periodo(vista.per), s = agrega(l);
     h += '<div class="carta"><h2>Así está tu preparación</h2><div class="seg">' + [[7, "7 días"], [30, "30 días"], [0, "Todo"]].map(function (o) { return '<button data-a="per" data-v="' + o[0] + '" class="' + (vista.per === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
@@ -345,9 +420,15 @@ var AC = {
   pausa: function () { if (enPausa()) reanuda(); else pausa(); pinta(); },
   descartar: function () { confirma("Se descartará el test en curso sin guardarlo.", "Descartar", function () { cur = null; borra("cur"); pinta(); }); },
   resp: function (v) { responde(+v); },
+  dud: function () { if (!cur.f) cur.f = cur.ps.map(function () { return 0; }); cur.f[cur.i] = cur.f[cur.i] ? 0 : 1; guarda("cur", cur); pinta(); },
+  sigdud: function () { if (!cur.f) return; var n = cur.f.length; for (var k = 1; k <= n; k++) { var j = (cur.i + k) % n; if (cur.f[j]) return mueve(j); } },
+  ofmod: function (v) { cfg.of.mod = v === "M" ? "M" : "B"; cfg.of.min = 0; guarda("cfg", cfg); pinta(); },
+  ofcom: function () { cfg.of.com = !cfg.of.com; cfg.of.min = 0; guarda("cfg", cfg); pinta(); },
+  ofres: function () { cfg.of.res = !cfg.of.res; guarda("cfg", cfg); pinta(); },
+  ofmin: function (v) { if (v === "0") { cfg.of.min = 0; } else { var m = parseInt(document.getElementById("ofmin").value, 10); if (isNaN(m) || m < 10 || m > 300) return avisa("Introduce un tiempo entre 10 y 300 minutos."); cfg.of.min = m === ofMinDef() ? 0 : m; } guarda("cfg", cfg); pinta(); },
   salta: function (v) { if (+v >= 0) mueve(+v); },
   fin: function () { finaliza(false); },
-  salir: function () { var b = cur.r.filter(function (x) { return x < 0; }).length; confirma(b ? "Quedan " + b + " preguntas en blanco. ¿Terminar y ver la nota?" : "¿Terminar y ver la nota?", "Terminar", function () { finaliza(false); }); },
+  salir: function () { var b = cur.r.filter(function (x) { return x < 0; }).length, d = cur.f ? cur.f.filter(function (x) { return x; }).length : 0; confirma((b ? "Quedan " + b + " preguntas en blanco." : "Has contestado todas.") + (d ? " Tienes " + d + " marcadas como dudosas." : "") + " ¿Entregar y ver la nota?", "Entregar", function () { finaliza(false); }); },
   filtro: function (v) { vista.filtro = v; pinta(); },
   tab: function (v) { vista.tab = v; pinta(); },
   per: function (v) { vista.per = +v; pinta(); },

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pregunta del Simulacro Oficial 2025 (Celador/a SERGAS)",
+  "type": "object",
+  "required": ["id", "bloque", "tema", "tipo", "dificultad", "pregunta", "opciones", "respuesta_correcta", "justificacion_normativa"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^S25-[0-9]{3,}$", "description": "Identificador estable" },
+    "bloque": { "enum": ["comun", "especifico"] },
+    "tema": { "type": "integer", "description": "1-10 parte específica; 101-108 parte común (C1-C8)", "anyOf": [{ "minimum": 1, "maximum": 10 }, { "minimum": 101, "maximum": 108 }] },
+    "tipo": { "enum": ["teorica", "supuesto"] },
+    "dificultad": { "enum": ["media", "alta"] },
+    "pregunta": { "type": "string", "minLength": 10 },
+    "opciones": {
+      "type": "object",
+      "required": ["A", "B", "C", "D"],
+      "additionalProperties": false,
+      "properties": { "A": { "type": "string" }, "B": { "type": "string" }, "C": { "type": "string" }, "D": { "type": "string" } }
+    },
+    "respuesta_correcta": { "enum": ["A", "B", "C", "D"] },
+    "justificacion_normativa": { "type": "string", "description": "Se muestra en el modo revisión" },
+    "fuente": { "type": "string", "description": "Examen real, norma o 'elaborada'" }
+  }
+}

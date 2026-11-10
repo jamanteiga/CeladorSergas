@@ -72,6 +72,10 @@ nav.inf svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.
 .puntos button.ko{background:var(--ko);border-color:var(--ko);color:#fff}
 .puntos button.hecha{background:var(--tinta2);border-color:var(--tinta2);color:#fff}
 .puntos button.act{outline:2.5px solid var(--naranja);outline-offset:1px}
+.puntos button{position:relative}
+.puntos button.res{border-style:dashed}
+.puntos button.dud::after{content:"";position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:var(--naranja);border:1.5px solid var(--carta)}
+.btn.dudon{border-color:var(--naranja);color:var(--naranja-osc)}
 .preg{font-size:1.06rem;font-weight:600;margin:6px 0 14px}
 .op{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;border:1.5px solid var(--linea);background:var(--carta);border-radius:11px;padding:13px;margin-bottom:9px}
 .op b{flex:none;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--linea);display:grid;place-items:center;font-size:.85rem}
@@ -162,6 +166,7 @@ svg.graf .rej{stroke:var(--linea);stroke-width:1}
 <script src="comun-19.js"></script>
 <script src="comun-20.js"></script>
 <script src="comun-21.js"></script>
+<script src="simulacro-2025.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
